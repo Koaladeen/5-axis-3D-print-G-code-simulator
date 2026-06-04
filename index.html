@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5-Axis G-code Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg0: #080b0f;
+    --bg1: #0d1117;
+    --bg2: #131920;
+    --bg3: #1a2230;
+    --bg4: #202c3d;
+    --border: rgba(255,255,255,0.07);
+    --border-hi: rgba(255,255,255,0.13);
+    --text0: #e8edf5;
+    --text1: #8a96aa;
+    --text2: #4a5568;
+    --accent: #3b82f6;
+    --accent-dim: rgba(59,130,246,0.15);
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+    --r: 8px;
+    --r-sm: 5px;
+  }
+
+  html, body { height: 100%; background: var(--bg0); color: var(--text0); font-family: var(--sans); font-size: 13px; overflow: hidden; }
+
+  /* ── Layout ── */
+  #app { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
+
+  /* ── Header ── */
+  #header {
+    background: var(--bg1);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 16px;
+  }
+  #header .logo {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: var(--accent); letter-spacing: 0.12em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #header .logo::before {
+    content: ''; display: block; width: 8px; height: 8px;
+    background: var(--accent); border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .h-sep { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+  #fname { font-size: 12px; color: var(--text1); font-family: var(--mono); }
+  #status { font-size: 11px; color: var(--amber); font-family: var(--mono); }
+  #header .spacer { flex: 1; }
+
+  /* Header controls */
+  .h-btn {
+    background: var(--bg3); border: 1px solid var(--border-hi);
+    color: var(--text0); font-family: var(--sans); font-size: 12px;
+    padding: 5px 12px; border-radius: var(--r-sm); cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .h-btn:hover { background: var(--bg4); border-color: rgba(255,255,255,0.2); }
+  .h-btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .h-btn.primary:hover { background: rgba(59,130,246,0.25); }
+
+  .h-select {
+    background: var(--bg3); border: 1px solid var(--border-hi);
+    color: var(--text0); font-family: var(--sans); font-size: 12px;
+    padding: 5px 8px; border-radius: var(--r-sm); cursor: pointer;
+  }
+  .h-num {
+    background: var(--bg3); border: 1px solid var(--border-hi);
+    color: var(--text0); font-family: var(--mono); font-size: 12px;
+    padding: 4px 6px; border-radius: var(--r-sm); width: 56px; text-align: right;
+  }
+  .h-num:focus, .h-select:focus { outline: 1px solid var(--accent); }
+
+  /* Toggle chips */
+  .chip-row { display: flex; gap: 4px; }
+  .chip {
+    display: flex; align-items: center; gap: 5px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px 10px; cursor: pointer;
+    font-size: 11px; color: var(--text1); transition: all 0.15s;
+    user-select: none;
+  }
+  .chip input { display: none; }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .chip.on { border-color: var(--border-hi); color: var(--text0); background: var(--bg4); }
+
+  /* ── Body ── */
+  #body { display: grid; grid-template-columns: 1fr 220px; overflow: hidden; }
+
+  /* ── Canvas area ── */
+  #canvas-col {
+    display: flex; flex-direction: column;
+    background: var(--bg0); overflow: hidden;
+  }
+
+  #cv-wrap { flex: 1; position: relative; overflow: hidden; }
+  #cv { display: block; width: 100%; height: 100%; }
+
+  /* Corner overlays on canvas */
+  #corner-tl, #corner-br {
+    position: absolute; font-family: var(--mono); font-size: 10px;
+    color: var(--text2); pointer-events: none; line-height: 1.6;
+  }
+  #corner-tl { top: 12px; left: 14px; }
+  #corner-br { bottom: 12px; right: 14px; text-align: right; }
+
+  /* Progress bar area */
+  #progress-area {
+    background: var(--bg1); border-top: 1px solid var(--border);
+    padding: 10px 16px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .prog-meta { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
+  .prog-meta .label { color: var(--text2); font-family: var(--mono); }
+  .prog-meta .val { color: var(--text1); font-family: var(--mono); }
+  .prog-meta .move-info { color: var(--text2); font-size: 10px; font-family: var(--mono); }
+
+  /* Custom range slider */
+  #prog {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 3px; background: var(--bg4);
+    border-radius: 2px; outline: none; cursor: pointer;
+  }
+  #prog::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+    transition: box-shadow 0.15s;
+  }
+  #prog::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(59,130,246,0.3); }
+  #prog::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: none;
+  }
+
+  .prog-track { position: relative; }
+  #prog-fill {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    left: 0; height: 3px; background: var(--accent);
+    border-radius: 2px; pointer-events: none;
+  }
+
+  /* ── Right panel ── */
+  #right-panel {
+    background: var(--bg1); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  .panel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 14px;
+  }
+  .panel-section:last-child { border-bottom: none; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .section-label {
+    font-size: 9px; font-family: var(--mono); color: var(--text2);
+    letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px;
+  }
+
+  /* Axis readout */
+  .axis-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+  .axis-cell {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--r-sm); padding: 6px 8px;
+  }
+  .axis-cell .axis-name { font-size: 9px; font-family: var(--mono); font-weight: 600; margin-bottom: 2px; }
+  .axis-cell .axis-val { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text0); }
+
+  /* Type badge */
+  #type-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; font-weight: 500;
+    padding: 4px 10px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--bg2);
+  }
+  #type-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* Stats */
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 0; border-bottom: 1px solid var(--border);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .k { font-size: 11px; color: var(--text1); display: flex; align-items: center; gap: 6px; }
+  .stat-row .k .dot { width: 5px; height: 5px; border-radius: 50; flex-shrink:0; border-radius:50%; }
+  .stat-row .v { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--text0); }
+
+  /* G-code panel */
+  #gcode-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  #gcode-ctx {
+    flex: 1; overflow-y: auto; font-family: var(--mono); font-size: 10px;
+    line-height: 1.8; scrollbar-width: thin; scrollbar-color: var(--bg4) transparent;
+  }
+  #gcode-ctx::-webkit-scrollbar { width: 3px; }
+  #gcode-ctx::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+  .gc-line { display: flex; gap: 6px; padding: 1px 4px; border-radius: 3px; }
+  .gc-line.current { background: rgba(59,130,246,0.12); }
+  .gc-ln { color: var(--text2); min-width: 28px; text-align: right; flex-shrink: 0; }
+  .gc-code { color: var(--text1); }
+  .gc-line.current .gc-code { color: var(--text0); }
+  .gc-cmd { color: var(--amber); }
+  .gc-axis { color: var(--cyan); }
+  .gc-comment { color: var(--text2); }
+
+  /* ── Settings modal ── */
+  #settings-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  #settings-overlay.open { display: flex; }
+  #settings-modal {
+    background: var(--bg1); border: 1px solid var(--border-hi);
+    border-radius: var(--r); width: 380px; max-height: 80vh;
+    overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  #settings-modal header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+  }
+  #settings-modal header button {
+    background: none; border: none; color: var(--text1); cursor: pointer; font-size: 18px; line-height: 1;
+  }
+  .s-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .s-section:last-child { border-bottom: none; }
+  .s-section-title {
+    font-size: 9px; font-family: var(--mono); color: var(--text2);
+    letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .s-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-bottom: 8px;
+  }
+  .s-row:last-child { margin-bottom: 0; }
+  .s-label { font-size: 12px; color: var(--text1); }
+  .s-input {
+    background: var(--bg3); border: 1px solid var(--border-hi);
+    color: var(--text0); font-family: var(--mono); font-size: 12px;
+    padding: 4px 8px; border-radius: var(--r-sm); width: 90px; text-align: right;
+  }
+  .s-input:focus { outline: 1px solid var(--accent); }
+  .s-hint { font-size: 10px; color: var(--text2); margin-top: 2px; }
+  .s-color { width: 32px; height: 28px; padding: 2px; border-radius: var(--r-sm); border: 1px solid var(--border-hi); background: var(--bg3); cursor: pointer; }
+  .s-apply {
+    width: 100%; padding: 8px; background: var(--accent-dim); border: 1px solid var(--accent);
+    color: var(--accent); font-family: var(--sans); font-size: 12px; border-radius: var(--r-sm);
+    cursor: pointer; margin-top: 4px; transition: background 0.15s;
+  }
+  .s-apply:hover { background: rgba(59,130,246,0.25); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div id="header">
+    <div class="logo">5AXIS.SIM</div>
+    <div class="h-sep"></div>
+    <button class="h-btn primary" id="loadBtn">↑ Load G-code</button>
+    <input type="file" id="fi" accept=".gcode,.nc,.txt" style="display:none">
+    <span id="fname">no file loaded</span>
+    <span id="status"></span>
+    <div class="spacer"></div>
+    <div class="chip-row" id="chips">
+      <label class="chip on" id="chip-se"><input type="checkbox" id="se" checked><span class="dot" style="background:#3b82f6"></span>3-axis</label>
+      <label class="chip on" id="chip-s5"><input type="checkbox" id="s5" checked><span class="dot" style="background:#ef4444"></span>5-axis</label>
+      <label class="chip" id="chip-st"><input type="checkbox" id="st"><span class="dot" style="background:#f59e0b"></span>Travel</label>
+      <label class="chip" id="chip-sc"><input type="checkbox" id="sc"><span class="dot" style="background:#a855f7"></span>By layer</label>
+    </div>
+    <div class="h-sep"></div>
+    <span style="font-size:11px;color:var(--text2);font-family:var(--mono);">nozzle</span>
+    <input type="number" class="h-num" id="nozzle" value="0.4" step="0.05" min="0.1" max="2.0">
+    <span style="font-size:11px;color:var(--text2);font-family:var(--mono);">mm</span>
+    <div class="h-sep"></div>
+    <select class="h-select" id="viewMode">
+      <option value="part" selected>Part frame</option>
+      <option value="machine">Machine frame</option>
+    </select>
+    <div class="h-sep"></div>
+    <button class="h-btn" id="settingsBtn" title="Scene settings">⚙ Settings</button>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="settings-overlay">
+    <div id="settings-modal">
+      <header>
+        <span>SCENE SETTINGS</span>
+        <button id="settingsClose">×</button>
+      </header>
+
+      <!-- Buildplate -->
+      <div class="s-section">
+        <div class="s-section-title">Buildplate</div>
+        <div class="s-row">
+          <span class="s-label">Width (X)</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="s-input" id="s-bp-w" type="number" value="90" min="10" max="500" step="1">
+            <span style="font-size:11px;color:var(--text2);">mm</span>
+          </div>
+        </div>
+        <div class="s-row">
+          <span class="s-label">Depth (Y)</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="s-input" id="s-bp-d" type="number" value="90" min="10" max="500" step="1">
+            <span style="font-size:11px;color:var(--text2);">mm</span>
+          </div>
+        </div>
+        <div class="s-row">
+          <span class="s-label">Thickness</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="s-input" id="s-bp-t" type="number" value="3" min="1" max="20" step="0.5">
+            <span style="font-size:11px;color:var(--text2);">mm</span>
+          </div>
+        </div>
+        <div class="s-row">
+          <span class="s-label">Color</span>
+          <input class="s-color" id="s-bp-col" type="color" value="#1e3a5f">
+        </div>
+        <div class="s-row">
+          <span class="s-label">Visible</span>
+          <label class="chip on" id="chip-bp" style="margin:0;">
+            <input type="checkbox" id="s-bp-vis" checked>
+            <span class="dot" style="background:#3b82f6"></span>Show
+          </label>
+        </div>
+      </div>
+
+      <!-- Nozzle -->
+      <div class="s-section">
+        <div class="s-section-title">Nozzle Cone</div>
+        <div class="s-row">
+          <span class="s-label">Tip diameter</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="s-input" id="s-nz-tip" type="number" value="0.8" min="0.1" max="5" step="0.1">
+            <span style="font-size:11px;color:var(--text2);">mm</span>
+          </div>
+        </div>
+        <div class="s-row">
+          <span class="s-label">Base diameter</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="s-input" id="s-nz-base" type="number" value="8" min="1" max="30" step="0.5">
+            <span style="font-size:11px;color:var(--text2);">mm</span>
+          </div>
+        </div>
+        <div class="s-row">
+          <span class="s-label">Cone angle</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="s-input" id="s-nz-ang" type="number" value="45" min="5" max="85" step="1">
+            <span style="font-size:11px;color:var(--text2);">°</span>
+          </div>
+        </div>
+        <div class="s-hint" style="margin-bottom:8px;">Height auto-computed from angle and diameters</div>
+        <div class="s-row">
+          <span class="s-label">Shaft length</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input class="s-input" id="s-nz-len" type="number" value="10" min="0" max="60" step="1">
+            <span style="font-size:11px;color:var(--text2);">mm</span>
+          </div>
+        </div>
+        <div class="s-row">
+          <span class="s-label">Color</span>
+          <input class="s-color" id="s-nz-col" type="color" value="#94a3b8">
+        </div>
+        <div class="s-row">
+          <span class="s-label">Visible</span>
+          <label class="chip on" id="chip-nz" style="margin:0;">
+            <input type="checkbox" id="s-nz-vis" checked>
+            <span class="dot" style="background:#94a3b8"></span>Show
+          </label>
+        </div>
+      </div>
+
+      <div class="s-section">
+        <button class="s-apply" id="s-apply-btn">Apply changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div id="body">
+
+    <!-- Canvas -->
+    <div id="canvas-col">
+      <div id="cv-wrap">
+        <canvas id="cv"></canvas>
+        <div id="corner-tl">
+          drag = orbit<br>
+          scroll = zoom<br>
+          right-drag = pan
+        </div>
+        <div id="corner-br" id="perfNote"></div>
+      </div>
+      <div id="progress-area">
+        <div class="prog-meta">
+          <span class="label">PROGRESS</span>
+          <span class="val" id="progv">100%</span>
+          <span class="move-info" id="moveInfo"></span>
+        </div>
+        <div class="prog-track">
+          <div id="prog-fill" style="width:100%"></div>
+          <input type="range" id="prog" min="0" max="10000" value="10000">
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div id="right-panel">
+
+      <!-- Axis positions -->
+      <div class="panel-section">
+        <div class="section-label">Axis Position</div>
+        <div class="axis-grid">
+          <div class="axis-cell"><div class="axis-name" style="color:#ef4444">X</div><div class="axis-val" id="ax-x">0.000</div></div>
+          <div class="axis-cell"><div class="axis-name" style="color:#22c55e">Y</div><div class="axis-val" id="ax-y">0.000</div></div>
+          <div class="axis-cell"><div class="axis-name" style="color:#3b82f6">Z</div><div class="axis-val" id="ax-z">0.000</div></div>
+          <div class="axis-cell"><div class="axis-name" style="color:#f59e0b">B</div><div class="axis-val" id="ax-b">0.0°</div></div>
+          <div class="axis-cell"><div class="axis-name" style="color:#a855f7">C</div><div class="axis-val" id="ax-c">0.0°</div></div>
+          <div class="axis-cell"><div class="axis-name" style="color:var(--text1)">E</div><div class="axis-val" id="ax-e">0.000</div></div>
+        </div>
+        <div style="margin-top:8px;">
+          <div id="type-badge"><span class="dot" id="type-dot"></span><span id="type-label">—</span></div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="panel-section">
+        <div class="section-label">Stats</div>
+        <div class="stat-row"><span class="k"><span class="dot" style="background:#3b82f6"></span>3-axis beads</span><span class="v" id="c3ax">—</span></div>
+        <div class="stat-row"><span class="k"><span class="dot" style="background:#ef4444"></span>5-axis beads</span><span class="v" id="c5ax">—</span></div>
+        <div class="stat-row"><span class="k"><span class="dot" style="background:#f59e0b"></span>Travel moves</span><span class="v" id="ctrav">—</span></div>
+        <div class="stat-row"><span class="k">Total moves</span><span class="v" id="ctot">—</span></div>
+      </div>
+
+      <!-- G-code -->
+      <div class="panel-section" id="gcode-panel">
+        <div class="section-label">G-code</div>
+        <div id="gcode-ctx"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── Three.js ──────────────────────────────────────────────────────
+const cv = document.getElementById('cv');
+let renderer, scene, camera, rootGroup;
+let mesh3=null, mesh5=null, lineT=null;
+let rotX=-0.4, rotY=0.4, zoom=1, baseZ=200, panX=0, panY=0;
+let isDrag=false, isRightDrag=false, lastMX=0, lastMY=0;
+
+function initThree(){
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45,1,0.01,1e6);
+  camera.position.set(0,0,200);
+  renderer = new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(0,0);
+  scene.add(new THREE.AmbientLight(0xffffff,0.55));
+  const dl=new THREE.DirectionalLight(0xffffff,0.9); dl.position.set(1,2,1.5); scene.add(dl);
+  const dl2=new THREE.DirectionalLight(0xffffff,0.25); dl2.position.set(-1,-1,-1); scene.add(dl2);
+  rootGroup = new THREE.Group(); scene.add(rootGroup);
+
+  function resize(){
+    const w=cv.parentElement.clientWidth, h=cv.parentElement.clientHeight;
+    renderer.setSize(w,h,false);
+    camera.aspect=w/h; camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(cv.parentElement);
+  resize();
+
+  (function loop(){
+    requestAnimationFrame(loop);
+    rootGroup.rotation.x=rotX; rootGroup.rotation.y=rotY;
+    rootGroup.position.x=panX; rootGroup.position.y=panY;
+    renderer.render(scene,camera);
+  })();
+}
+
+function initStaticSceneLate(){
+  // Called after initThree so scene exists
+  initStaticScene();
+}
+
+const cvWrap = document.getElementById('cv-wrap');
+cvWrap.addEventListener('contextmenu',e=>e.preventDefault());
+cvWrap.addEventListener('mousedown',e=>{isDrag=true;isRightDrag=e.button===2;lastMX=e.clientX;lastMY=e.clientY;cv.style.cursor='grabbing';});
+window.addEventListener('mouseup',()=>{isDrag=false;cv.style.cursor='grab';});
+window.addEventListener('mousemove',e=>{
+  if(!isDrag) return;
+  const dx=e.clientX-lastMX, dy=e.clientY-lastMY;
+  lastMX=e.clientX; lastMY=e.clientY;
+  if(isRightDrag){panX+=dx*0.15*(baseZ*zoom/200); panY-=dy*0.15*(baseZ*zoom/200);}
+  else{rotY+=dx*0.007; rotX+=dy*0.007;}
+});
+cvWrap.addEventListener('wheel',e=>{
+  zoom*=e.deltaY>0?1.1:0.91; zoom=Math.max(0.02,Math.min(100,zoom));
+  camera.position.z=baseZ*zoom; e.preventDefault();
+},{passive:false});
+
+// ── Chip toggles ──────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(chip=>{
+  const cb=chip.querySelector('input');
+  chip.addEventListener('click',()=>{
+    cb.checked=!cb.checked;
+    chip.classList.toggle('on',cb.checked);
+  });
+});
+
+// ── Static scene objects ──────────────────────────────────────────
+let buildplateMesh=null, nozzleMesh=null;
+const staticGroup=new THREE.Group();
+
+// Build or rebuild buildplate
+function buildBuildplate(){
+  if(buildplateMesh){ staticGroup.remove(buildplateMesh); buildplateMesh.geometry.dispose(); buildplateMesh.material.dispose(); }
+  const w=parseFloat(document.getElementById('s-bp-w').value)||90;
+  const d=parseFloat(document.getElementById('s-bp-d').value)||90;
+  const t=parseFloat(document.getElementById('s-bp-t').value)||3;
+  const col=document.getElementById('s-bp-col').value;
+  const vis=document.getElementById('s-bp-vis').checked;
+  const geo=new THREE.BoxGeometry(w,t,d);
+  const mat=new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.55});
+  buildplateMesh=new THREE.Mesh(geo,mat);
+  // Position so top face is at Z=0; Three.js Y-up so top face at y=0 means center at y=-t/2
+  buildplateMesh.position.set(0,-t/2,0);
+  buildplateMesh.visible=vis;
+  staticGroup.add(buildplateMesh);
+
+  // Grid lines on top surface
+  const existing=staticGroup.getObjectByName('bp-grid'); if(existing) staticGroup.remove(existing);
+  const gridGrp=new THREE.Group(); gridGrp.name='bp-grid';
+  const lineMat=new THREE.LineBasicMaterial({color:0x3b82f6,transparent:true,opacity:0.2});
+  const step=10;
+  for(let xi=-w/2;xi<=w/2+0.01;xi+=step){
+    const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(xi,0,-d/2),new THREE.Vector3(xi,0,d/2)]);
+    gridGrp.add(new THREE.Line(g,lineMat));
+  }
+  for(let zi=-d/2;zi<=d/2+0.01;zi+=step){
+    const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-w/2,0,zi),new THREE.Vector3(w/2,0,zi)]);
+    gridGrp.add(new THREE.Line(g,lineMat));
+  }
+  // Border
+  const bpts=[new THREE.Vector3(-w/2,0,-d/2),new THREE.Vector3(w/2,0,-d/2),new THREE.Vector3(w/2,0,d/2),new THREE.Vector3(-w/2,0,d/2),new THREE.Vector3(-w/2,0,-d/2)];
+  const bg=new THREE.BufferGeometry().setFromPoints(bpts);
+  gridGrp.add(new THREE.Line(bg,new THREE.LineBasicMaterial({color:0x3b82f6,transparent:true,opacity:0.5})));
+  gridGrp.visible=vis;
+  staticGroup.add(gridGrp);
+}
+
+// Build or rebuild nozzle cone. Tip points down, shaft extends upward.
+function buildNozzle(){
+  if(nozzleMesh){ staticGroup.remove(nozzleMesh); nozzleMesh.traverse(c=>{if(c.geometry)c.geometry.dispose();if(c.material)c.material.dispose();}); }
+  const tipR  = parseFloat(document.getElementById('s-nz-tip').value)/2  || 0.4;
+  const baseR = parseFloat(document.getElementById('s-nz-base').value)/2 || 4;
+  const angDeg= parseFloat(document.getElementById('s-nz-ang').value)    || 45;
+  const shaftL= parseFloat(document.getElementById('s-nz-len').value)    || 10;
+  const col   = document.getElementById('s-nz-col').value;
+  const vis   = document.getElementById('s-nz-vis').checked;
+
+  const angRad = angDeg * Math.PI / 180;
+  const coneH  = (baseR - tipR) / Math.tan(angRad);
+
+  const mat = new THREE.MeshLambertMaterial({color:col, transparent:true, opacity:0.8, side:THREE.DoubleSide});
+
+  // Cone: tip at bottom (radiusTop=tipR, radiusBottom=baseR so THREE cylinder goes top→bottom)
+  // We want tip pointing DOWN (-Y). CylinderGeometry goes along Y.
+  // radiusTop = tipR (will be at +Y = top = upward), radiusBottom = baseR (at -Y = downward toward bed)
+  // Then we flip it 180° so tip faces down.
+  const coneGeo  = new THREE.CylinderGeometry(tipR, baseR, coneH, 24, 1);
+  const coneMesh = new THREE.Mesh(coneGeo, mat);
+  // Flip 180° around X so tip (-Y end = tipR end) now points down
+  coneMesh.rotation.x = Math.PI;
+  // After flip the cone occupies y: -coneH/2 to +coneH/2 relative to its own origin
+  // We want tip at y=0 (nozzle tip at move position), so shift up by coneH/2
+  coneMesh.position.y = coneH / 2;
+
+  // Shaft cylinder: sits on top of cone base, extends upward
+  const shaftGeo  = new THREE.CylinderGeometry(baseR, baseR, shaftL, 24, 1);
+  const shaftMesh = new THREE.Mesh(shaftGeo, mat);
+  // Bottom of shaft at y = coneH, center at y = coneH + shaftL/2
+  shaftMesh.position.y = coneH + shaftL / 2;
+
+  nozzleMesh = new THREE.Group();
+  nozzleMesh.add(coneMesh);
+  nozzleMesh.add(shaftMesh);
+  nozzleMesh.visible = vis;
+  nozzleMesh.userData.height = coneH + shaftL;
+  staticGroup.add(nozzleMesh);
+}
+
+// Update nozzle position to current move's world coords
+function updateNozzlePosition(moveIdx){
+  if(!nozzleMesh) return;
+  const h=nozzleMesh.userData.height||15;
+  if(!allMoves.length||moveIdx===0){
+    nozzleMesh.position.set(0,0,0);
+    nozzleMesh.rotation.set(0,0,0);
+    return;
+  }
+  const m=allMoves[Math.min(moveIdx-1,allMoves.length-1)];
+  const usePart=document.getElementById('viewMode').value==='part';
+  let wx,wy,wz;
+  if(usePart){[wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);}
+  else{wx=m.mx;wy=m.my;wz=m.mz;}
+  // Three.js is Y-up: world X→x, world Z(up)→y, world Y→-z
+  // Nozzle group origin is at the tip, which sits at the move position
+  nozzleMesh.position.set(wx, wz, -wy);
+  // Tilt to match B and C axes
+  nozzleMesh.rotation.set(0,0,0);
+  nozzleMesh.rotateY(-m.mc*Math.PI/180);
+  nozzleMesh.rotateZ( m.mb*Math.PI/180);
+}
+
+function initStaticScene(){
+  rootGroup.add(staticGroup);
+  buildBuildplate();
+  buildNozzle();
+}
+
+// ── Settings modal wiring ─────────────────────────────────────────
+document.getElementById('settingsBtn').addEventListener('click',()=>document.getElementById('settings-overlay').classList.add('open'));
+document.getElementById('settingsClose').addEventListener('click',()=>document.getElementById('settings-overlay').classList.remove('open'));
+document.getElementById('settings-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget) e.currentTarget.classList.remove('open');});
+document.getElementById('s-apply-btn').addEventListener('click',()=>{
+  buildBuildplate();
+  buildNozzle();
+  document.getElementById('settings-overlay').classList.remove('open');
+});
+// Chip toggles inside modal for bp/nz visibility
+['chip-bp','chip-nz'].forEach(id=>{
+  const chip=document.getElementById(id);
+  if(!chip) return;
+  const cb=chip.querySelector('input');
+  chip.addEventListener('click',()=>{ cb.checked=!cb.checked; chip.classList.toggle('on',cb.checked); });
+});
+
+// ── Data ──────────────────────────────────────────────────────────
+let allMoves=[], cachedText='';
+let cum3=[], cum5=[], cumT=[];
+
+// ── Parser ────────────────────────────────────────────────────────
+function parseGcode(text, usePart){
+  const lines=text.split('\n');
+  let x=0,y=0,z=0,b=0,c=0,e=0;
+  let absXYZ=true, absE=false;
+  let layerZ=-Infinity, layerIdx=0;
+  const result=[];
+  for(let li=0;li<lines.length;li++){
+    const raw=lines[li].trim();
+    if(!raw||raw[0]===';'||raw[0]==='(') continue;
+    const lu=raw.toUpperCase();
+    if(lu.startsWith('M83')){absE=false;continue;}
+    if(lu.startsWith('M82')){absE=true;continue;}
+    if(lu.startsWith('G90')){absXYZ=true;continue;}
+    if(lu.startsWith('G91')){absXYZ=false;continue;}
+    const isG0=/^G0\b/.test(lu), isG1=/^G1\b/.test(lu);
+    if(!isG0&&!isG1) continue;
+    const px=x,py=y,pz=z,pb=b,pc=c;
+    const xm=lu.match(/X(-?[\d.]+)/),ym=lu.match(/Y(-?[\d.]+)/),zm=lu.match(/Z(-?[\d.]+)/);
+    const bm=lu.match(/B(-?[\d.]+)/),cm=lu.match(/C(-?[\d.]+)/),em=lu.match(/E(-?[\d.]+)/);
+    if(xm) x=absXYZ?parseFloat(xm[1]):x+parseFloat(xm[1]);
+    if(ym) y=absXYZ?parseFloat(ym[1]):y+parseFloat(ym[1]);
+    if(zm) z=absXYZ?parseFloat(zm[1]):z+parseFloat(zm[1]);
+    if(bm) b=parseFloat(bm[1]);
+    if(cm) c=parseFloat(cm[1]);
+    let extruding=false;
+    if(em){const ev=parseFloat(em[1]);if(!absE&&ev>0.0001)extruding=true;if(absE&&ev>e+0.0001)extruding=true;if(absE)e=ev;else e+=parseFloat(em[1]);}
+    if(isG0&&!em) extruding=false;
+    if(z>layerZ+0.001){layerZ=z;layerIdx++;}
+    const is5ax=Math.abs(b)>0.5||Math.abs(c)>0.5;
+    const type=extruding?(is5ax?'e5':'e3'):'travel';
+    let s0,s1;
+    if(usePart){s0=toPart(px,py,pz,pb,pc);s1=toPart(x,y,z,b,c);}
+    else{s0=[px,py,pz];s1=[x,y,z];}
+    const dx2=s1[0]-s0[0],dy2=s1[1]-s0[1],dz2=s1[2]-s0[2];
+    if(dx2*dx2+dy2*dy2+dz2*dz2<1e-8) continue;
+    result.push({type,s0,s1,mx:x,my:y,mz:z,mb:b,mc:c,me:e,layer:layerIdx,lineNum:li+1,rawLine:raw});
+  }
+  return result;
+}
+
+function toPart(x,y,z,bDeg,cDeg){
+  const b=bDeg*Math.PI/180, c=cDeg*Math.PI/180;
+  const xb=x*Math.cos(-b)+z*Math.sin(-b), yb=y, zb=-x*Math.sin(-b)+z*Math.cos(-b);
+  return [xb*Math.cos(-c)-yb*Math.sin(-c), xb*Math.sin(-c)+yb*Math.cos(-c), zb];
+}
+
+function layerColor(layer,maxLayer){
+  const col=new THREE.Color();
+  col.setHSL(0.66-Math.min(layer/Math.max(maxLayer,1),1)*0.66,1,0.5);
+  return col;
+}
+
+// ── Build meshes ──────────────────────────────────────────────────
+const dummy=new THREE.Object3D();
+
+function buildMeshes(nd){
+  [mesh3,mesh5,lineT].forEach(m=>{if(m){m.geometry.dispose();m.material.dispose();rootGroup.remove(m);}});
+  mesh3=mesh5=lineT=null;
+  const ax=rootGroup.getObjectByName('axes'); if(ax) rootGroup.remove(ax);
+
+  const show3=document.getElementById('se').checked;
+  const show5=document.getElementById('s5').checked;
+  const showT=document.getElementById('st').checked;
+  const colorByLayer=document.getElementById('sc').checked;
+  const maxLayer=allMoves.length?Math.max(...allMoves.map(s=>s.layer)):0;
+
+  const segs3=allMoves.filter(s=>s.type==='e3');
+  const segs5=allMoves.filter(s=>s.type==='e5');
+  const segsT=allMoves.filter(s=>s.type==='travel');
+
+  // Cumulative indices
+  let n3=0,n5=0,nT=0;
+  cum3=new Int32Array(allMoves.length+1);
+  cum5=new Int32Array(allMoves.length+1);
+  cumT=new Int32Array(allMoves.length+1);
+  for(let i=0;i<allMoves.length;i++){
+    const t=allMoves[i].type;
+    if(t==='e3')n3++;else if(t==='e5')n5++;else nT++;
+    cum3[i+1]=n3;cum5[i+1]=n5;cumT[i+1]=nT;
+  }
+
+  const r=nd/2;
+  const cylGeo=new THREE.CylinderGeometry(r,r,1,6,1);
+
+  function makeInstanced(segs,color,visible){
+    if(!segs.length||!visible) return null;
+    const mat=new THREE.MeshLambertMaterial({color,vertexColors:colorByLayer});
+    const mesh=new THREE.InstancedMesh(cylGeo,mat,segs.length);
+    const colors=colorByLayer?new Float32Array(segs.length*3):null;
+    for(let i=0;i<segs.length;i++){
+      const [x0,y0,z0]=segs[i].s0,[x1,y1,z1]=segs[i].s1;
+      const v0=new THREE.Vector3(x0,z0,-y0),v1=new THREE.Vector3(x1,z1,-y1);
+      const len=v0.distanceTo(v1);
+      if(len<0.001){mesh.setMatrixAt(i,new THREE.Matrix4());continue;}
+      dummy.position.copy(v0).lerp(v1,0.5);
+      dummy.scale.set(1,len,1);
+      dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),v1.clone().sub(v0).normalize());
+      dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix);
+      if(colorByLayer){const col=layerColor(segs[i].layer,maxLayer);colors[i*3]=col.r;colors[i*3+1]=col.g;colors[i*3+2]=col.b;}
+    }
+    mesh.instanceMatrix.needsUpdate=true;
+    if(colorByLayer) mesh.instanceColor=new THREE.InstancedBufferAttribute(colors,3);
+    mesh.count=0; mesh.userData.fullCount=segs.length;
+    return mesh;
+  }
+
+  mesh3=makeInstanced(segs3,0x3b82f6,show3); if(mesh3) rootGroup.add(mesh3);
+  mesh5=makeInstanced(segs5,0xef4444,show5); if(mesh5) rootGroup.add(mesh5);
+
+  if(showT&&segsT.length){
+    const pts=[];
+    for(const s of segsT){
+      pts.push(new THREE.Vector3(s.s0[0],s.s0[2],-s.s0[1]));
+      pts.push(new THREE.Vector3(s.s1[0],s.s1[2],-s.s1[1]));
+    }
+    const geo=new THREE.BufferGeometry().setFromPoints(pts);
+    lineT=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0xf59e0b,transparent:true,opacity:0.4}));
+    lineT.userData.fullCount=segsT.length;
+    lineT.geometry.setDrawRange(0,0);
+    rootGroup.add(lineT);
+  }
+
+  const axHelper=new THREE.AxesHelper(10); axHelper.name='axes'; rootGroup.add(axHelper);
+
+  // Fit camera using full bounds
+  if(mesh3) mesh3.count=mesh3.userData.fullCount;
+  if(mesh5) mesh5.count=mesh5.userData.fullCount;
+  if(lineT) lineT.geometry.setDrawRange(0,lineT.userData.fullCount*2);
+  const box=new THREE.Box3().setFromObject(rootGroup);
+  if(!box.isEmpty()){
+    const center=box.getCenter(new THREE.Vector3());
+    const size=box.getSize(new THREE.Vector3());
+    rootGroup.position.sub(center); panX=0; panY=0;
+    const maxD=Math.max(size.x,size.y,size.z,1);
+    baseZ=maxD*1.8; zoom=1;
+    camera.position.z=baseZ; camera.near=maxD*0.001; camera.far=maxD*300;
+    camera.updateProjectionMatrix();
+  }
+  if(mesh3) mesh3.count=0;
+  if(mesh5) mesh5.count=0;
+  if(lineT) lineT.geometry.setDrawRange(0,0);
+
+  document.getElementById('c3ax').textContent=segs3.length.toLocaleString();
+  document.getElementById('c5ax').textContent=segs5.length.toLocaleString();
+  document.getElementById('ctrav').textContent=segsT.length.toLocaleString();
+  document.getElementById('ctot').textContent=allMoves.length.toLocaleString();
+  document.getElementById('corner-br').textContent=allMoves.length.toLocaleString()+' moves';
+}
+
+// ── Progress ──────────────────────────────────────────────────────
+function applyProgress(pct){
+  const frac=pct/10000;
+  const moveIdx=Math.floor(allMoves.length*frac);
+  if(mesh3) mesh3.count=cum3[moveIdx];
+  if(mesh5) mesh5.count=cum5[moveIdx];
+  if(lineT) lineT.geometry.setDrawRange(0,cumT[moveIdx]*2);
+
+  const pctStr=Math.round(frac*100)+'%';
+  document.getElementById('progv').textContent=pctStr;
+  document.getElementById('prog-fill').style.width=pctStr;
+  document.getElementById('moveInfo').textContent=moveIdx.toLocaleString()+' / '+(allMoves.length||0).toLocaleString();
+
+  updateReadout(moveIdx);
+  updateNozzlePosition(moveIdx);
+}
+
+const TYPE_LABELS={e3:'3-axis extrude',e5:'5-axis extrude',travel:'Travel'};
+const TYPE_COLORS={e3:'#3b82f6',e5:'#ef4444',travel:'#f59e0b'};
+
+function updateReadout(moveIdx){
+  if(!allMoves.length||moveIdx===0){
+    ['x','y','z'].forEach(a=>document.getElementById('ax-'+a).textContent='0.000');
+    ['b','c'].forEach(a=>document.getElementById('ax-'+a).textContent='0.0°');
+    document.getElementById('ax-e').textContent='0.000';
+    document.getElementById('type-label').textContent='—';
+    document.getElementById('type-dot').style.background='';
+    document.getElementById('gcode-ctx').innerHTML='';
+    return;
+  }
+  const m=allMoves[Math.min(moveIdx-1,allMoves.length-1)];
+  document.getElementById('ax-x').textContent=m.mx.toFixed(3);
+  document.getElementById('ax-y').textContent=m.my.toFixed(3);
+  document.getElementById('ax-z').textContent=m.mz.toFixed(3);
+  document.getElementById('ax-b').textContent=m.mb.toFixed(1)+'°';
+  document.getElementById('ax-c').textContent=m.mc.toFixed(1)+'°';
+  document.getElementById('ax-e').textContent=m.me.toFixed(3);
+  document.getElementById('type-label').textContent=TYPE_LABELS[m.type]||m.type;
+  document.getElementById('type-dot').style.background=TYPE_COLORS[m.type]||'';
+  buildContext(m.lineNum);
+}
+
+function buildContext(centerLine){
+  if(!cachedText) return;
+  const lines=cachedText.split('\n');
+  const start=Math.max(0,centerLine-6), end=Math.min(lines.length-1,centerLine+5);
+  let html='';
+  for(let i=start;i<=end;i++){
+    const cur=i===centerLine-1;
+    const raw=lines[i];
+    // Syntax color: command, axis letters, comments
+    let colored=escHtml(raw);
+    if(!raw.trim().startsWith(';')){
+      colored=colored
+        .replace(/^(\s*)(G\d+|M\d+)/,'$1<span class="gc-cmd">$2</span>')
+        .replace(/\b([XYZEBCF])(-?[\d.]+)/g,'<span class="gc-axis">$1$2</span>')
+        .replace(/(;.*)$/,'<span class="gc-comment">$1</span>');
+    } else {
+      colored='<span class="gc-comment">'+colored+'</span>';
+    }
+    const ln=String(i+1).padStart(4,' ').replace(/ /g,'&nbsp;');
+    html+=`<div class="gc-line${cur?' current':''}"><span class="gc-ln">${ln}</span><span class="gc-code">${colored}</span></div>`;
+  }
+  const ctx=document.getElementById('gcode-ctx');
+  ctx.innerHTML=html;
+  const cur=ctx.querySelector('.current');
+  if(cur) cur.scrollIntoView({block:'nearest'});
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── Rebuild ───────────────────────────────────────────────────────
+function rebuildAll(resetProgress){
+  if(!cachedText) return;
+  document.getElementById('status').textContent='building…';
+  setTimeout(()=>{
+    allMoves=parseGcode(cachedText, document.getElementById('viewMode').value==='part');
+    buildMeshes(parseFloat(document.getElementById('nozzle').value)||0.4);
+    if(resetProgress) document.getElementById('prog').value=10000;
+    applyProgress(parseInt(document.getElementById('prog').value));
+    document.getElementById('status').textContent='';
+  },10);
+}
+
+document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('fi').click());
+document.getElementById('fi').addEventListener('change',ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  document.getElementById('fname').textContent=f.name;
+  document.getElementById('status').textContent='parsing…';
+  const r=new FileReader();
+  r.onload=e=>{cachedText=e.target.result; rebuildAll(true);};
+  r.readAsText(f);
+});
+document.getElementById('viewMode').addEventListener('change',()=>rebuildAll(false));
+document.getElementById('nozzle').addEventListener('change',()=>rebuildAll(false));
+document.getElementById('sc').addEventListener('change',()=>rebuildAll(false));
+['se','s5','st'].forEach(id=>document.getElementById(id).addEventListener('change',()=>rebuildAll(false)));
+document.getElementById('prog').addEventListener('input',e=>applyProgress(parseInt(e.target.value)));
+
+initThree();
+initStaticSceneLate();
+</script>
+</body>
+</html>
