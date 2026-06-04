@@ -525,11 +525,12 @@ document.querySelectorAll('.chip').forEach(chip=>{
 
 // ── Static scene objects ──────────────────────────────────────────
 let buildplateMesh=null, nozzleMesh=null;
-const staticGroup=new THREE.Group();
+const staticGroup=new THREE.Group(); // nozzle lives here — never gets bed rotation
+const bedGroup=new THREE.Group();    // buildplate + toolpath meshes; gets B/C in machine frame
 
 // Build or rebuild buildplate
 function buildBuildplate(){
-  if(buildplateMesh){ staticGroup.remove(buildplateMesh); buildplateMesh.geometry.dispose(); buildplateMesh.material.dispose(); }
+  if(buildplateMesh){ bedGroup.remove(buildplateMesh); buildplateMesh.geometry.dispose(); buildplateMesh.material.dispose(); }
   const w=parseFloat(document.getElementById('s-bp-w').value)||90;
   const d=parseFloat(document.getElementById('s-bp-d').value)||90;
   const t=parseFloat(document.getElementById('s-bp-t').value)||3;
@@ -538,13 +539,12 @@ function buildBuildplate(){
   const geo=new THREE.BoxGeometry(w,t,d);
   const mat=new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.55});
   buildplateMesh=new THREE.Mesh(geo,mat);
-  // Position so top face is at Z=0; Three.js Y-up so top face at y=0 means center at y=-t/2
   buildplateMesh.position.set(0,-t/2,0);
   buildplateMesh.visible=vis;
-  staticGroup.add(buildplateMesh);
+  bedGroup.add(buildplateMesh);
 
   // Grid lines on top surface
-  const existing=staticGroup.getObjectByName('bp-grid'); if(existing) staticGroup.remove(existing);
+  const existing=bedGroup.getObjectByName('bp-grid'); if(existing) bedGroup.remove(existing);
   const gridGrp=new THREE.Group(); gridGrp.name='bp-grid';
   const lineMat=new THREE.LineBasicMaterial({color:0x3b82f6,transparent:true,opacity:0.2});
   const step=10;
@@ -556,12 +556,11 @@ function buildBuildplate(){
     const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-w/2,0,zi),new THREE.Vector3(w/2,0,zi)]);
     gridGrp.add(new THREE.Line(g,lineMat));
   }
-  // Border
   const bpts=[new THREE.Vector3(-w/2,0,-d/2),new THREE.Vector3(w/2,0,-d/2),new THREE.Vector3(w/2,0,d/2),new THREE.Vector3(-w/2,0,d/2),new THREE.Vector3(-w/2,0,-d/2)];
   const bg=new THREE.BufferGeometry().setFromPoints(bpts);
   gridGrp.add(new THREE.Line(bg,new THREE.LineBasicMaterial({color:0x3b82f6,transparent:true,opacity:0.5})));
   gridGrp.visible=vis;
-  staticGroup.add(gridGrp);
+  bedGroup.add(gridGrp);
 }
 
 // Build or rebuild nozzle cone. Tip points down, shaft extends upward.
@@ -605,31 +604,55 @@ function buildNozzle(){
   staticGroup.add(nozzleMesh);
 }
 
+// Canonical bed quaternion for machine frame (bed tilts away from nozzle)
+function calcBedQuat(bRad, cRad){
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad); // flipped for machine frame
+  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0), -cRad);
+  return new THREE.Quaternion().copy(qB).multiply(qC);
+}
+
+// Nozzle quaternion for part frame (inverse of toPart rotation)
+function calcNozzleQuat(bRad, cRad){
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1), -bRad);
+  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0),  cRad); // +cRad matches toPart's -c
+  return new THREE.Quaternion().copy(qB).multiply(qC).conjugate();
+}
+
+// Apply B/C rotation to bedGroup in machine frame, reset in part frame
+function updateBedRotation(moveIdx){
+  const usePart = document.getElementById('viewMode').value==='part';
+  if(usePart || !allMoves.length || moveIdx===0){
+    bedGroup.quaternion.set(0,0,0,1);
+    return;
+  }
+  const m = allMoves[Math.min(moveIdx-1, allMoves.length-1)];
+  bedGroup.quaternion.copy(calcBedQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
+}
+
 // Update nozzle position to current move's world coords
 function updateNozzlePosition(moveIdx){
   if(!nozzleMesh) return;
-  const h=nozzleMesh.userData.height||15;
   if(!allMoves.length||moveIdx===0){
     nozzleMesh.position.set(0,0,0);
-    nozzleMesh.rotation.set(0,0,0);
+    nozzleMesh.quaternion.set(0,0,0,1);
     return;
   }
   const m=allMoves[Math.min(moveIdx-1,allMoves.length-1)];
   const usePart=document.getElementById('viewMode').value==='part';
-  let wx,wy,wz;
-  if(usePart){[wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);}
-  else{wx=m.mx;wy=m.my;wz=m.mz;}
-  // Three.js is Y-up: world X→x, world Z(up)→y, world Y→-z
-  // Nozzle group origin is at the tip, which sits at the move position
-  nozzleMesh.position.set(wx, wz, -wy);
-  // Tilt to match B and C axes
-  nozzleMesh.rotation.set(0,0,0);
-  nozzleMesh.rotateY(-m.mc*Math.PI/180);
-  nozzleMesh.rotateZ( m.mb*Math.PI/180);
+
+  if(usePart){
+    const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
+    nozzleMesh.position.set(wx,wz,-wy);
+    nozzleMesh.quaternion.copy(calcNozzleQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
+  } else {
+    nozzleMesh.position.set(m.mx, m.mz, -m.my);
+    nozzleMesh.quaternion.set(0,0,0,1);
+  }
 }
 
 function initStaticScene(){
-  rootGroup.add(staticGroup);
+  rootGroup.add(staticGroup); // nozzle — no bed rotation ever
+  rootGroup.add(bedGroup);    // buildplate + toolpath meshes
   buildBuildplate();
   buildNozzle();
 }
@@ -656,7 +679,7 @@ let allMoves=[], cachedText='';
 let cum3=[], cum5=[], cumT=[];
 
 // ── Parser ────────────────────────────────────────────────────────
-function parseGcode(text, usePart){
+function parseGcode(text){
   const lines=text.split('\n');
   let x=0,y=0,z=0,b=0,c=0,e=0;
   let absXYZ=true, absE=false;
@@ -686,9 +709,11 @@ function parseGcode(text, usePart){
     if(z>layerZ+0.001){layerZ=z;layerIdx++;}
     const is5ax=Math.abs(b)>0.5||Math.abs(c)>0.5;
     const type=extruding?(is5ax?'e5':'e3'):'travel';
-    let s0,s1;
-    if(usePart){s0=toPart(px,py,pz,pb,pc);s1=toPart(x,y,z,b,c);}
-    else{s0=[px,py,pz];s1=[x,y,z];}
+    // Always use part-frame coords for segment geometry — in machine frame the bed
+    // group gets B/C rotation applied, so geometry should be in part/bed-local space.
+    // Raw machine XYZ for a pure B/C rotation move would be zero-length and get skipped.
+    const s0=toPart(px,py,pz,pb,pc);
+    const s1=toPart(x,y,z,b,c);
     const dx2=s1[0]-s0[0],dy2=s1[1]-s0[1],dz2=s1[2]-s0[2];
     if(dx2*dx2+dy2*dy2+dz2*dz2<1e-8) continue;
     result.push({type,s0,s1,mx:x,my:y,mz:z,mb:b,mc:c,me:e,layer:layerIdx,lineNum:li+1,rawLine:raw});
@@ -712,9 +737,9 @@ function layerColor(layer,maxLayer){
 const dummy=new THREE.Object3D();
 
 function buildMeshes(nd){
-  [mesh3,mesh5,lineT].forEach(m=>{if(m){m.geometry.dispose();m.material.dispose();rootGroup.remove(m);}});
+  [mesh3,mesh5,lineT].forEach(m=>{if(m){m.geometry?.dispose();m.material?.dispose();bedGroup.remove(m);}});
   mesh3=mesh5=lineT=null;
-  const ax=rootGroup.getObjectByName('axes'); if(ax) rootGroup.remove(ax);
+  const ax=bedGroup.getObjectByName('axes'); if(ax) bedGroup.remove(ax);
 
   const show3=document.getElementById('se').checked;
   const show5=document.getElementById('s5').checked;
@@ -762,8 +787,8 @@ function buildMeshes(nd){
     return mesh;
   }
 
-  mesh3=makeInstanced(segs3,0x3b82f6,show3); if(mesh3) rootGroup.add(mesh3);
-  mesh5=makeInstanced(segs5,0xef4444,show5); if(mesh5) rootGroup.add(mesh5);
+  mesh3=makeInstanced(segs3,0x3b82f6,show3); if(mesh3) bedGroup.add(mesh3);
+  mesh5=makeInstanced(segs5,0xef4444,show5); if(mesh5) bedGroup.add(mesh5);
 
   if(showT&&segsT.length){
     const pts=[];
@@ -775,12 +800,12 @@ function buildMeshes(nd){
     lineT=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0xf59e0b,transparent:true,opacity:0.4}));
     lineT.userData.fullCount=segsT.length;
     lineT.geometry.setDrawRange(0,0);
-    rootGroup.add(lineT);
+    bedGroup.add(lineT);
   }
 
-  const axHelper=new THREE.AxesHelper(10); axHelper.name='axes'; rootGroup.add(axHelper);
+  const axHelper=new THREE.AxesHelper(10); axHelper.name='axes'; bedGroup.add(axHelper);
 
-  // Fit camera using full bounds
+  // Fit camera using full bounds (use bedGroup + staticGroup together)
   if(mesh3) mesh3.count=mesh3.userData.fullCount;
   if(mesh5) mesh5.count=mesh5.userData.fullCount;
   if(lineT) lineT.geometry.setDrawRange(0,lineT.userData.fullCount*2);
@@ -820,6 +845,7 @@ function applyProgress(pct){
 
   updateReadout(moveIdx);
   updateNozzlePosition(moveIdx);
+  updateBedRotation(moveIdx);
 }
 
 const TYPE_LABELS={e3:'3-axis extrude',e5:'5-axis extrude',travel:'Travel'};
@@ -881,7 +907,7 @@ function rebuildAll(resetProgress){
   if(!cachedText) return;
   document.getElementById('status').textContent='building…';
   setTimeout(()=>{
-    allMoves=parseGcode(cachedText, document.getElementById('viewMode').value==='part');
+    allMoves=parseGcode(cachedText);
     buildMeshes(parseFloat(document.getElementById('nozzle').value)||0.4);
     if(resetProgress) document.getElementById('prog').value=10000;
     applyProgress(parseInt(document.getElementById('prog').value));
