@@ -287,9 +287,8 @@
     <input type="number" class="h-num" id="nozzle" value="0.4" step="0.05" min="0.1" max="2.0">
     <span style="font-size:11px;color:var(--text2);font-family:var(--mono);">mm</span>
     <div class="h-sep"></div>
-    <select class="h-select" id="viewMode">
-      <option value="part" selected>Part frame</option>
-      <option value="machine">Machine frame</option>
+    <select class="h-select" id="viewMode" style="display:none;">
+      <option value="machine" selected>Machine frame</option>
     </select>
     <div class="h-sep"></div>
     <button class="h-btn" id="settingsBtn" title="Scene settings">⚙ Settings</button>
@@ -385,6 +384,38 @@
         </div>
       </div>
 
+      <!-- Axis Limits -->
+      <div class="s-section">
+        <div class="s-section-title">Axis Limits</div>
+        <div class="s-hint" style="margin-bottom:10px;">Leave max blank or set to 99999 for infinite (e.g. C axis)</div>
+
+        <div style="display:grid;grid-template-columns:1fr 80px 80px;gap:4px 6px;align-items:center;font-size:11px;margin-bottom:6px;">
+          <span style="color:var(--text2);font-family:var(--mono);">AXIS</span>
+          <span style="color:var(--text2);font-family:var(--mono);text-align:right;">MIN</span>
+          <span style="color:var(--text2);font-family:var(--mono);text-align:right;">MAX</span>
+
+          <span class="s-label" style="color:#ef4444;">X</span>
+          <input class="s-input" id="lim-xmin" type="number" value="-50" step="1">
+          <input class="s-input" id="lim-xmax" type="number" value="50" step="1">
+
+          <span class="s-label" style="color:#22c55e;">Y</span>
+          <input class="s-input" id="lim-ymin" type="number" value="-50" step="1">
+          <input class="s-input" id="lim-ymax" type="number" value="50" step="1">
+
+          <span class="s-label" style="color:#3b82f6;">Z</span>
+          <input class="s-input" id="lim-zmin" type="number" value="0" step="1">
+          <input class="s-input" id="lim-zmax" type="number" value="90" step="1">
+
+          <span class="s-label" style="color:#f59e0b;">B</span>
+          <input class="s-input" id="lim-bmin" type="number" value="-120" step="1">
+          <input class="s-input" id="lim-bmax" type="number" value="32" step="1">
+
+          <span class="s-label" style="color:#a855f7;">C</span>
+          <input class="s-input" id="lim-cmin" type="number" value="-99999" step="1">
+          <input class="s-input" id="lim-cmax" type="number" value="99999" step="1">
+        </div>
+      </div>
+
       <div class="s-section">
         <button class="s-apply" id="s-apply-btn">Apply changes</button>
       </div>
@@ -415,6 +446,14 @@
           <div id="prog-fill" style="width:100%"></div>
           <input type="range" id="prog" min="0" max="10000" value="10000">
         </div>
+      </div>
+      <!-- Violations banner -->
+      <div id="violations-bar" style="display:none; background:#1a0a0a; border-top:1px solid #7f1d1d; padding:8px 16px; max-height:120px; overflow-y:auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-family:var(--mono);font-size:10px;color:#ef4444;letter-spacing:0.1em;">⚠ AXIS LIMIT VIOLATIONS</span>
+          <button id="violations-close" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;line-height:1;">×</button>
+        </div>
+        <div id="violations-list" style="font-family:var(--mono);font-size:10px;color:#fca5a5;line-height:1.8;"></div>
       </div>
     </div>
 
@@ -606,8 +645,15 @@ function buildNozzle(){
 
 // Canonical bed quaternion for machine frame (bed tilts away from nozzle)
 function calcBedQuat(bRad, cRad){
-  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad); // flipped for machine frame
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad);
   const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0), -cRad);
+  return new THREE.Quaternion().copy(qB).multiply(qC);
+}
+
+// Part frame nozzle: same as calcBedQuat but C flipped
+function calcNozzlePartQuat(bRad, cRad){
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad);
+  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0),  cRad);
   return new THREE.Quaternion().copy(qB).multiply(qC);
 }
 
@@ -643,7 +689,7 @@ function updateNozzlePosition(moveIdx){
   if(usePart){
     const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
     nozzleMesh.position.set(wx,wz,-wy);
-    nozzleMesh.quaternion.copy(calcNozzleQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
+    nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
   } else {
     nozzleMesh.position.set(m.mx, m.mz, -m.my);
     nozzleMesh.quaternion.set(0,0,0,1);
@@ -664,6 +710,7 @@ document.getElementById('settings-overlay').addEventListener('click',e=>{if(e.ta
 document.getElementById('s-apply-btn').addEventListener('click',()=>{
   buildBuildplate();
   buildNozzle();
+  checkLimits();
   document.getElementById('settings-overlay').classList.remove('open');
 });
 // Chip toggles inside modal for bp/nz visibility
@@ -911,10 +958,75 @@ function rebuildAll(resetProgress){
     buildMeshes(parseFloat(document.getElementById('nozzle').value)||0.4);
     if(resetProgress) document.getElementById('prog').value=10000;
     applyProgress(parseInt(document.getElementById('prog').value));
+    checkLimits();
     document.getElementById('status').textContent='';
   },10);
 }
 
+document.getElementById('violations-close').addEventListener('click',()=>{
+  document.getElementById('violations-bar').style.display='none';
+});
+
+function getLimits(){
+  return {
+    xmin: parseFloat(document.getElementById('lim-xmin').value),
+    xmax: parseFloat(document.getElementById('lim-xmax').value),
+    ymin: parseFloat(document.getElementById('lim-ymin').value),
+    ymax: parseFloat(document.getElementById('lim-ymax').value),
+    zmin: parseFloat(document.getElementById('lim-zmin').value),
+    zmax: parseFloat(document.getElementById('lim-zmax').value),
+    bmin: parseFloat(document.getElementById('lim-bmin').value),
+    bmax: parseFloat(document.getElementById('lim-bmax').value),
+    cmin: parseFloat(document.getElementById('lim-cmin').value),
+    cmax: parseFloat(document.getElementById('lim-cmax').value),
+  };
+}
+
+function checkLimits(){
+  const L=getLimits();
+  const violations=[];
+  const seen={}; // dedupe per axis+direction
+
+  const axes=[
+    {key:'x', label:'X', min:L.xmin, max:L.xmax, get:m=>m.mx},
+    {key:'y', label:'Y', min:L.ymin, max:L.ymax, get:m=>m.my},
+    {key:'z', label:'Z', min:L.zmin, max:L.zmax, get:m=>m.mz},
+    {key:'b', label:'B', min:L.bmin, max:L.bmax, get:m=>m.mb},
+  ];
+
+  for(let i=0;i<allMoves.length;i++){
+    const m=allMoves[i];
+    for(const ax of axes){
+      const v=ax.get(m);
+      if(v<ax.min){
+        const k=ax.key+'-min';
+        if(!seen[k]){
+          seen[k]=true;
+          const unit=ax.key==='b'||ax.key==='c'?'°':'mm';
+          violations.push(`Line ${m.lineNum}: ${ax.label} = ${v.toFixed(2)}${unit} &lt; min (${ax.min}${unit})`);
+        }
+      }
+      if(v>ax.max){
+        const k=ax.key+'-max';
+        if(!seen[k]){
+          seen[k]=true;
+          const unit=ax.key==='b'||ax.key==='c'?'°':'mm';
+          violations.push(`Line ${m.lineNum}: ${ax.label} = ${v.toFixed(2)}${unit} &gt; max (${ax.max}${unit})`);
+        }
+      }
+    }
+  }
+
+  const bar=document.getElementById('violations-bar');
+  const list=document.getElementById('violations-list');
+  if(violations.length){
+    list.innerHTML=violations.join('<br>');
+    bar.style.display='block';
+  } else {
+    bar.style.display='none';
+    list.innerHTML='';
+  }
+}
 document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('fi').click());
 document.getElementById('fi').addEventListener('change',ev=>{
   const f=ev.target.files[0]; if(!f) return;
