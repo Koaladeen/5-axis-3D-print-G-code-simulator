@@ -1628,17 +1628,105 @@ function makeProxyMesh(proxy, colliding=false){
   return grp;
 }
 
-// Sample vertices from an STL mesh, decimated to maxPts for hull computation
-function sampleMeshVertices(mesh3d, maxPts=200){
-  const pos = mesh3d.geometry.attributes.position;
-  if(!pos) return [];
-  const total = pos.count;
-  const step = Math.max(1, Math.floor(total/maxPts));
-  const pts = [];
-  for(let i=0;i<total;i+=step){
-    pts.push([pos.getX(i), pos.getY(i), pos.getZ(i)]);
+// Compute concavity of a point set relative to its convex hull
+// Returns the plane that best splits concave regions
+function findBestSplitPlane(pts, hullGeo){
+  if(!hullGeo || !hullGeo.attributes.position) return null;
+
+  // Get hull face normals and centroids
+  const hullPos = hullGeo.attributes.position;
+  const hullNorm = hullGeo.attributes.normal;
+  if(!hullNorm) return null;
+
+  // Find points most "inside" the hull — furthest from any hull face
+  let maxConcavity = 0;
+  let worstPt = null;
+
+  const faceCount = hullPos.count / 3;
+  const v = new THREE.Vector3();
+
+  for(const p of pts){
+    v.set(p[0],p[1],p[2]);
+    // Find min distance to any hull face (negative = inside)
+    let minDist = Infinity;
+    for(let f=0;f<faceCount;f++){
+      const nx = hullNorm.getX(f*3);
+      const ny = hullNorm.getY(f*3);
+      const nz = hullNorm.getZ(f*3);
+      const fx = hullPos.getX(f*3);
+      const fy = hullPos.getY(f*3);
+      const fz = hullPos.getZ(f*3);
+      const d = (v.x-fx)*nx + (v.y-fy)*ny + (v.z-fz)*nz;
+      if(d < minDist) minDist = d;
+    }
+    if(-minDist > maxConcavity){ maxConcavity = -minDist; worstPt = p; }
   }
-  return pts;
+
+  if(maxConcavity < 0.5 || !worstPt) return null; // convex enough, no split needed
+
+  // Try splitting along each principal axis through the centroid
+  let cx=0,cy=0,cz=0;
+  for(const p of pts){ cx+=p[0];cy+=p[1];cz+=p[2]; }
+  cx/=pts.length; cy/=pts.length; cz/=pts.length;
+
+  // Try 3 axis-aligned planes + 3 diagonal planes through centroid
+  const candidates = [
+    [1,0,0,cx], [0,1,0,cy], [0,0,1,cz],
+    [1,1,0,(cx+cy)/2], [1,0,1,(cx+cz)/2], [0,1,1,(cy+cz)/2]
+  ];
+
+  let bestScore = -1, bestPlane = null;
+  for(const [nx,ny,nz,d] of candidates){
+    const len = Math.sqrt(nx*nx+ny*ny+nz*nz);
+    let nPos=0, nNeg=0;
+    for(const p of pts){
+      const side = (p[0]*nx+p[1]*ny+p[2]*nz)/len - d/len;
+      if(side >= 0) nPos++; else nNeg++;
+    }
+    // Score: prefer balanced splits
+    const balance = 1 - Math.abs(nPos-nNeg)/pts.length;
+    if(balance > bestScore){ bestScore=balance; bestPlane=[nx/len,ny/len,nz/len,d/len]; }
+  }
+  return bestPlane;
+}
+
+// Split point cloud by plane [nx,ny,nz,d] → [side>=0, side<0]
+function splitByPlane(pts, plane){
+  const [nx,ny,nz,d] = plane;
+  const pos=[], neg=[];
+  for(const p of pts){
+    if(p[0]*nx+p[1]*ny+p[2]*nz >= d) pos.push(p); else neg.push(p);
+  }
+  return [pos, neg];
+}
+
+// Build a convex hull geometry from points, returns null if degenerate
+function buildHullGeo(pts){
+  if(pts.length < 4) return null;
+  try{
+    const verts = pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]));
+    return new THREE.ConvexGeometry(verts);
+  }catch(e){ return null; }
+}
+
+// Auto-decompose a point cloud into 1 or 2 convex hulls
+// Returns array of point arrays (1 or 2 groups)
+function decomposeToHulls(pts, concavityThreshold=1.0){
+  if(pts.length < 4) return [pts];
+
+  // Build initial hull and check concavity
+  const hullGeo = buildHullGeo(pts);
+  if(!hullGeo) return [pts];
+
+  const plane = findBestSplitPlane(pts, hullGeo);
+  if(!plane) return [pts]; // already convex enough
+
+  const [posGroup, negGroup] = splitByPlane(pts, plane);
+
+  // Only split if both groups are large enough for a hull
+  if(posGroup.length < 4 || negGroup.length < 4) return [pts];
+
+  return [posGroup, negGroup];
 }
 
 // Auto-generate convex hull proxies for all loaded machine parts
@@ -1695,14 +1783,21 @@ function autoGenerateHulls(){
 
     if(allPts.length<4) continue;
 
-    collProxies.push({
-      id:nextProxyId++,
-      part:partName,
-      type:'hull',
-      hullPoints:allPts,
-      sx:0,sy:0,sz:0,ox:0,oy:0,oz:0
-    });
-    count++;
+    // Try to decompose into 2 hulls for concave parts
+    const groups = decomposeToHulls(allPts);
+    for(let gi=0;gi<groups.length;gi++){
+      const grp2=groups[gi];
+      if(grp2.length<4) continue;
+      collProxies.push({
+        id:nextProxyId++,
+        part:partName,
+        type:'hull',
+        hullPoints:grp2,
+        sx:0,sy:0,sz:0,ox:0,oy:0,oz:0,
+        label: groups.length>1 ? `${partName} hull ${gi+1}` : partName
+      });
+      count++;
+    }
   }
 
   rebuildProxyWireframes();
@@ -1951,7 +2046,7 @@ function renderProxyList(){
       <select class="cp-part" data-id="${proxy.id}">
         ${MACHINE_PARTS.map(p=>`<option value="${p}" ${p===proxy.part?'selected':''}>${p}</option>`).join('')}
       </select>
-      <span style="font-family:var(--mono);font-size:10px;color:var(--cyan);text-align:center;">G${partGroups[proxy.part]??1}</span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--cyan);text-align:center;" title="${proxy.label||proxy.part}">G${partGroups[proxy.part]??1}${proxy.type==='hull'&&proxy.label?.includes('hull 2')?' ②':''}</span>
       <select class="cp-type" data-id="${proxy.id}">
         <option value="box" ${proxy.type==='box'?'selected':''}>Box</option>
         <option value="cylinder" ${proxy.type==='cylinder'?'selected':''}>Cyl</option>
