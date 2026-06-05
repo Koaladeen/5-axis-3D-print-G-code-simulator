@@ -464,7 +464,7 @@
         <span class="title">COLLISION PROXIES</span>
         <div style="display:flex;align-items:center;gap:10px;">
           <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;">
-            <input type="checkbox" id="coll-show-proxies" checked>
+            <input type="checkbox" id="coll-show-proxies">
             <span style="color:var(--text1);">Show proxies</span>
           </label>
           <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;">
@@ -796,6 +796,15 @@
       <div class="ps" id="gcode-panel" style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;border-bottom:none;">
         <div class="ps-head">G-CODE</div>
         <div id="gcode-ctx"></div>
+      </div>
+
+      <!-- Collision report -->
+      <div class="ps" style="flex-shrink:0;border-top:1px solid var(--border);">
+        <div class="ps-head" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>COLLISION REPORT</span>
+          <span id="coll-report-badge" style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:2px;background:var(--ui-bg2);color:var(--text2);">OK</span>
+        </div>
+        <div id="coll-report" style="padding:6px 12px;font-family:var(--mono);font-size:10px;line-height:1.9;max-height:100px;overflow-y:auto;color:var(--text2);">No data</div>
       </div>
 
     </div>
@@ -2052,121 +2061,132 @@ function setProxyWireframesVisible(v){
   Object.values(proxyMeshes).forEach(m=>m.visible=v);
 }
 
-function getProxyOBB(proxy){
-  const grp = mGrp[proxy.part];
-  if(!grp) return null;
-
-  if(proxy.type==='hull' && proxy.hullPoints){
-    // For hull: compute world-space bounding box of all hull points
-    // Fast approximate check — transform each point by part's world matrix
-    const mat = grp.matrixWorld;
-    const v = new THREE.Vector3();
-    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
-    for(const p of proxy.hullPoints){
-      v.set(p[0],p[1],p[2]).applyMatrix4(mat);
-      if(v.x<minX)minX=v.x; if(v.x>maxX)maxX=v.x;
-      if(v.y<minY)minY=v.y; if(v.y>maxY)maxY=v.y;
-      if(v.z<minZ)minZ=v.z; if(v.z>maxZ)maxZ=v.z;
+function getProxyWorldPts(proxy){
+  const grp=mGrp[proxy.part]; if(!grp) return null;
+  const mat=grp.matrixWorld;
+  const v=new THREE.Vector3();
+  if(proxy.type==='hull'&&proxy.hullPoints){
+    return proxy.hullPoints.map(p=>{ v.set(p[0],p[1],p[2]).applyMatrix4(mat); return [v.x,v.y,v.z]; });
+  }
+  const cx=proxy.ox||0,cy=proxy.oy||0,cz=proxy.oz||0;
+  const pts=[];
+  if(proxy.type==='sphere'){
+    const r=proxy.sx;
+    for(let i=0;i<8;i++) for(let j=0;j<6;j++){
+      const th=i/8*Math.PI*2,ph=j/6*Math.PI-Math.PI/2;
+      pts.push([cx+r*Math.cos(ph)*Math.cos(th),cy+r*Math.sin(ph),cz+r*Math.cos(ph)*Math.sin(th)]);
     }
-    const center=new THREE.Vector3((minX+maxX)/2,(minY+maxY)/2,(minZ+maxZ)/2);
-    const quat=new THREE.Quaternion(); // world-aligned
-    return {center, quat, hx:(maxX-minX)/2, hy:(maxY-minY)/2, hz:(maxZ-minZ)/2, type:'box', r:0, hullPoints:proxy.hullPoints, partMat:mat};
+  } else if(proxy.type==='cylinder'){
+    const r=proxy.sx,h=proxy.sy/2;
+    for(let i=0;i<10;i++){
+      const th=i/10*Math.PI*2;
+      pts.push([cx+r*Math.cos(th),cy+h,cz+r*Math.sin(th)]);
+      pts.push([cx+r*Math.cos(th),cy-h,cz+r*Math.sin(th)]);
+    }
+    pts.push([cx,cy+h,cz]);pts.push([cx,cy-h,cz]);
+  } else {
+    const hx=proxy.sx/2,hy=proxy.sy/2,hz=proxy.sz/2;
+    for(const sx of[-1,1])for(const sy of[-1,1])for(const sz of[-1,1])
+      pts.push([cx+sx*hx,cy+sy*hy,cz+sz*hz]);
   }
-
-  const local = new THREE.Vector3(proxy.ox, proxy.oy, proxy.oz);
-  const world = local.clone().applyMatrix4(grp.matrixWorld);
-  const quat = new THREE.Quaternion();
-  grp.getWorldQuaternion(quat);
-  let hx, hy, hz;
-  if(proxy.type==='sphere'){ hx=hy=hz=proxy.sx; }
-  else if(proxy.type==='cylinder'){ hx=hz=proxy.sx; hy=proxy.sy/2; }
-  else { hx=proxy.sx/2; hy=proxy.sy/2; hz=proxy.sz/2; }
-  return { center: world, quat, hx, hy, hz, type: proxy.type, r: proxy.sx };
+  return pts.map(p=>{ v.set(p[0],p[1],p[2]).applyMatrix4(mat); return [v.x,v.y,v.z]; });
 }
 
-// SAT overlap test for two OBBs (separating axis theorem, approximate)
-function obbsOverlap(a, b){
-  // Transform b center into a's local space
-  const invA = new THREE.Quaternion().copy(a.quat).conjugate();
-  const diff = new THREE.Vector3().subVectors(b.center, a.center).applyQuaternion(invA);
-  // Get b's axes in a's local space
-  const relQ = new THREE.Quaternion().copy(invA).multiply(b.quat);
-  const bx = new THREE.Vector3(1,0,0).applyQuaternion(relQ);
-  const by = new THREE.Vector3(0,1,0).applyQuaternion(relQ);
-  const bz = new THREE.Vector3(0,0,1).applyQuaternion(relQ);
-  // Test 15 axes (3 from A, 3 from B, 9 cross products)
-  const axes=[
-    new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1),
-    bx, by, bz,
-  ];
-  for(const axis of axes){
-    if(axis.lengthSq()<0.001) continue;
-    const pA = a.hx*Math.abs(axis.x)+a.hy*Math.abs(axis.y)+a.hz*Math.abs(axis.z);
-    // Project b extents onto axis (in a's local space)
-    const pB = b.hx*Math.abs(axis.dot(bx))+b.hy*Math.abs(axis.dot(by))+b.hz*Math.abs(axis.dot(bz));
-    const dist = Math.abs(diff.dot(axis));
-    if(dist > pA+pB) return false;
+function gjkSupport(pts,d){
+  let best=-Infinity,bx=0,by=0,bz=0;
+  for(const p of pts){
+    const dot=p[0]*d[0]+p[1]*d[1]+p[2]*d[2];
+    if(dot>best){best=dot;bx=p[0];by=p[1];bz=p[2];}
   }
-  return true;
+  return [bx,by,bz];
 }
 
-function spheresOverlap(a, b){
-  return a.center.distanceTo(b.center) < a.r + b.r;
+function gjkOverlap(ptsA,ptsB){
+  if(!ptsA||!ptsB||ptsA.length<1||ptsB.length<1) return false;
+  const suppMD=d=>{
+    const a=gjkSupport(ptsA,d);
+    const b=gjkSupport(ptsB,[-d[0],-d[1],-d[2]]);
+    return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+  };
+  let d=[1,0,0];
+  let s=suppMD(d);
+  const simplex=[s];
+  d=[-s[0],-s[1],-s[2]];
+  for(let iter=0;iter<48;iter++){
+    const len=Math.sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
+    if(len<1e-9) return true;
+    const nd=[d[0]/len,d[1]/len,d[2]/len];
+    const a=suppMD(nd);
+    if(a[0]*nd[0]+a[1]*nd[1]+a[2]*nd[2]<-1e-6) return false;
+    simplex.push(a);
+    if(simplex.length>4) simplex.shift();
+    let ox=0,oy=0,oz=0;
+    for(const pt of simplex){ox+=pt[0];oy+=pt[1];oz+=pt[2];}
+    const n=simplex.length;
+    ox/=n;oy/=n;oz/=n;
+    const dl=Math.sqrt(ox*ox+oy*oy+oz*oz);
+    if(dl<1e-9) return true;
+    d=[-ox,-oy,-oz];
+  }
+  return false;
 }
 
 function checkCollisions(){
-  if(!collisionEnabled || !collProxies.length || !machineLoaded){
-    const collDiv=document.getElementById('coll-violations');
-    if(collDiv) collDiv.innerHTML='';
+  const report=document.getElementById('coll-report');
+  const badge=document.getElementById('coll-report-badge');
+  if(!collisionEnabled||!collProxies.length||!machineLoaded){
+    const cd=document.getElementById('coll-violations'); if(cd) cd.innerHTML='';
+    if(report){report.textContent='No data';report.style.color='var(--text2)';}
+    if(badge){badge.textContent='OK';badge.style.background='var(--ui-bg2)';badge.style.color='var(--text2)';}
     return;
   }
   rootGroup.updateMatrixWorld(true);
-
-  const violations = [];
-  for(const proxy of collProxies) setProxyColliding(proxy.id, false);
-
-  const proxiesByPart = {};
+  const violations=[];
+  for(const proxy of collProxies) setProxyColliding(proxy.id,false);
+  const proxiesByPart={};
   for(const p of collProxies){
     if(!proxiesByPart[p.part]) proxiesByPart[p.part]=[];
     proxiesByPart[p.part].push(p);
   }
-  const parts = Object.keys(proxiesByPart);
-
+  const parts=Object.keys(proxiesByPart);
   for(let i=0;i<parts.length;i++){
     for(let j=i+1;j<parts.length;j++){
-      const pA=parts[i], pB=parts[j];
+      const pA=parts[i],pB=parts[j];
       if(!shouldCheck(pA,pB)) continue;
       for(const pa of proxiesByPart[pA]){
         for(const pb of proxiesByPart[pB]){
-          const obbA=getProxyOBB(pa), obbB=getProxyOBB(pb);
-          if(!obbA||!obbB) continue;
-          let hit=false;
-          if(pa.type==='sphere'&&pb.type==='sphere') hit=spheresOverlap(obbA,obbB);
-          else hit=obbsOverlap(obbA,obbB);
-          if(hit){
-            violations.push(`${pA} ↔ ${pB}`);
-            setProxyColliding(pa.id, true);
-            setProxyColliding(pb.id, true);
+          const wA=getProxyWorldPts(pa),wB=getProxyWorldPts(pb);
+          if(!wA||!wB) continue;
+          if(gjkOverlap(wA,wB)){
+            const key=pA+' <-> '+pB;
+            if(!violations.includes(key)) violations.push(key);
+            setProxyColliding(pa.id,true);
+            setProxyColliding(pb.id,true);
           }
         }
       }
     }
   }
-
-  // Show collision violations in a separate div, leave axis violations untouched
-  const list = document.getElementById('violations-list');
-  let collDiv = document.getElementById('coll-violations');
-  if(!collDiv){
-    collDiv = document.createElement('div');
-    collDiv.id = 'coll-violations';
-    list.appendChild(collDiv);
+  if(report){
+    if(violations.length){
+      report.innerHTML=violations.map(v=>'<div style="color:var(--red);">! '+v+'</div>').join('');
+    } else {
+      report.innerHTML='<span style="color:var(--green);">OK - No collisions</span>';
+    }
   }
-  collDiv.innerHTML = violations.map(v=>`<div style="color:#fca5a5;">💥 Collision: ${v}</div>`).join('');
-  // Show bar if there's any content
-  const bar = document.getElementById('violations-bar');
-  bar.style.display = (list.textContent.trim()) ? 'block' : 'none';
-  document.getElementById('coll-status').textContent =
-    violations.length ? `⚠ ${violations.length} collision(s) detected` : '✓ No collisions detected';
+  if(badge){
+    badge.textContent=violations.length?violations.length+' HIT':'OK';
+    badge.style.background=violations.length?'#fdecea':'var(--ui-bg2)';
+    badge.style.color=violations.length?'var(--red)':'var(--green)';
+  }
+  const list=document.getElementById('violations-list');
+  let collDiv=document.getElementById('coll-violations');
+  if(!collDiv){collDiv=document.createElement('div');collDiv.id='coll-violations';list.appendChild(collDiv);}
+  collDiv.innerHTML=violations.map(v=>'<div>COLLISION: '+v+'</div>').join('');
+  const bar=document.getElementById('violations-bar');
+  bar.style.display=(list.textContent.trim())?'block':'none';
+  document.getElementById('coll-status').textContent=
+    violations.length?violations.length+' collision(s) detected':'No collisions detected';
 }
 
 // ── Configurator UI ───────────────────────────────────────────────
