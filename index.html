@@ -1723,6 +1723,24 @@ document.getElementById('pb-speed').addEventListener('input',function(){
   document.getElementById('pb-speed-val').textContent=this.value+'×';
 });
 
+// ── Arrow key single-line navigation ─────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(isPlaying) return;
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return;
+  e.preventDefault();
+  if(!allMoves.length) return;
+  const prog = document.getElementById('prog');
+  const cur = parseInt(prog.value);
+  const curMove = Math.round(cur/10000 * allMoves.length);
+  const nextMove = e.key==='ArrowRight'
+    ? Math.min(allMoves.length, curMove+1)
+    : Math.max(0, curMove-1);
+  const newPct = Math.round(nextMove/allMoves.length * 10000);
+  prog.value = newPct;
+  applyProgress(newPct);
+});
+
 // ── Collision proxy system ────────────────────────────────────────
 let collProxies = [];
 let proxyMeshes = {}; // id → THREE.Mesh
@@ -2185,6 +2203,8 @@ function checkCollisions(){
     if(badge){badge.textContent='OK';badge.style.background='var(--ui-bg2)';badge.style.color='var(--text2)';}
     return;
   }
+  // Force matrix update even on invisible objects
+  machineGroup.visible=true;
   scene.updateMatrixWorld(true);
   const violations=[];
   for(const proxy of collProxies) setProxyColliding(proxy.id,false);
@@ -2219,6 +2239,8 @@ function checkCollisions(){
       report.innerHTML='<span style="color:var(--green);">OK - No collisions</span>';
     }
   }
+  // Restore machine visibility to user setting
+  machineGroup.visible=document.getElementById('showMach').checked;
   if(badge){
     badge.textContent=violations.length?violations.length+' HIT':'OK';
     badge.style.background=violations.length?'#fdecea':'var(--ui-bg2)';
