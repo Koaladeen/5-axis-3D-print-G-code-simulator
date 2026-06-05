@@ -238,7 +238,7 @@
   #coll-modal header button { background:none;border:none;color:var(--text1);cursor:pointer;font-size:18px; }
   #coll-list { flex:1; overflow-y:auto; padding: 8px 0; }
   .coll-proxy {
-    display: grid; grid-template-columns: 70px 60px 1fr 1fr 1fr 1fr 28px;
+    display: grid; grid-template-columns: 70px 55px 60px 1fr 1fr 1fr 28px;
     gap: 4px; align-items: center; padding: 5px 12px;
     border-bottom: 1px solid var(--border); font-size: 11px;
   }
@@ -403,8 +403,10 @@
         </div>
       </header>
       <div style="padding:6px 12px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--cyan);" id="coll-selected-part">Click a machine part in the 3D view to select it for proxy assignment</div>
-      <div class="coll-header-row">
-        <span>PART</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>SZ</span><span>OFFSET X,Y,Z</span><span></span>
+      <div id="coll-groups-bar" style="padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>
+      </div>
+        <span>PART</span><span>GROUP</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>OFFSET X,Y,Z</span><span></span>
       </div>
       <div id="coll-list"></div>
       <div id="coll-footer">
@@ -1586,13 +1588,19 @@ let nextProxyId = 1;
 let selectedPart = null; // currently selected machine part for proxy assignment
 let partHighlights = {}; // part name → original materials
 
-const SKIP_PAIRS = new Set([
-  'Frame-Z','Frame-B','Frame-C','Frame-Y','Frame-X',
-  'Z-B','Z-C','B-C','Y-X'
-]);
-function shouldCheck(a,b){
-  const k1=a+'-'+b, k2=b+'-'+a;
-  return !SKIP_PAIRS.has(k1)&&!SKIP_PAIRS.has(k2);
+// ── Collision groups ──────────────────────────────────────────────
+// Group 0 = never check (Frame, static)
+// Group 1 = toolhead side (X, Y)
+// Group 2 = bed side (Z, B, C)
+// Only proxies from DIFFERENT non-zero groups are checked.
+const DEFAULT_GROUPS = {Frame:0, Z:2, B:2, C:2, Y:1, X:1};
+let partGroups = {...DEFAULT_GROUPS};
+
+function shouldCheck(a, b){
+  const ga = partGroups[a] ?? 1;
+  const gb = partGroups[b] ?? 1;
+  if(ga===0 || gb===0) return false;
+  return ga !== gb;
 }
 
 // Solid transparent proxy mesh — supports box, cylinder, sphere, hull
@@ -1926,16 +1934,16 @@ function renderProxyList(){
       <select class="cp-part" data-id="${proxy.id}">
         ${MACHINE_PARTS.map(p=>`<option value="${p}" ${p===proxy.part?'selected':''}>${p}</option>`).join('')}
       </select>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--cyan);text-align:center;">G${partGroups[proxy.part]??1}</span>
       <select class="cp-type" data-id="${proxy.id}">
         <option value="box" ${proxy.type==='box'?'selected':''}>Box</option>
         <option value="cylinder" ${proxy.type==='cylinder'?'selected':''}>Cyl</option>
         <option value="sphere" ${proxy.type==='sphere'?'selected':''}>Sphere</option>
         <option value="hull" ${proxy.type==='hull'?'selected':''}>Hull ✓</option>
       </select>
-      <input class="cp-sx" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="Width/Radius">
-      <input class="cp-sy" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="Height (box/cyl)">
-      <input class="cp-sz" type="number" data-id="${proxy.id}" value="${proxy.sz}" step="1" min="1" title="Depth (box)">
-      <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0">
+      <input class="cp-sx" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="Width/Radius" ${proxy.type==='hull'?'disabled':''}>
+      <input class="cp-sy" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="Height" ${proxy.type==='hull'?'disabled':''}>
+      <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0" ${proxy.type==='hull'?'disabled':''}>
       <button class="del-btn" data-id="${proxy.id}">×</button>
     `;
     container.appendChild(row);
@@ -1973,6 +1981,32 @@ function updateProxy(el){
 // ── Modal wiring ──────────────────────────────────────────────────
 document.getElementById('collBtn').addEventListener('click',()=>{
   collConfigOpen=true;
+  // Populate groups bar
+  const bar=document.getElementById('coll-groups-bar');
+  bar.innerHTML='<span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>';
+  MACHINE_PARTS.filter(p=>p!=='Frame').forEach(p=>{
+    const wrap=document.createElement('div');
+    wrap.style.cssText='display:flex;align-items:center;gap:4px;font-size:11px;';
+    const lbl=document.createElement('span');
+    lbl.style.cssText='color:var(--text1);font-family:var(--mono);';
+    lbl.textContent=p;
+    const sel=document.createElement('select');
+    sel.id='grp-'+p;
+    sel.style.cssText='background:var(--bg3);border:1px solid var(--border-hi);color:var(--text0);font-family:var(--mono);font-size:10px;padding:2px 4px;border-radius:3px;';
+    [['0','Off'],['1','G1'],['2','G2'],['3','G3']].forEach(([v,l])=>{
+      const o=document.createElement('option');
+      o.value=v; o.textContent=l;
+      if((partGroups[p]??1)===parseInt(v)) o.selected=true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change',()=>{ partGroups[p]=parseInt(sel.value); });
+    wrap.appendChild(lbl); wrap.appendChild(sel);
+    bar.appendChild(wrap);
+  });
+  const hint=document.createElement('span');
+  hint.style.cssText='font-size:10px;color:var(--text2);margin-left:4px;';
+  hint.textContent='Only cross-group pairs checked';
+  bar.appendChild(hint);
   renderProxyList();
   document.getElementById('coll-overlay').classList.add('open');
 });
@@ -2009,7 +2043,7 @@ document.getElementById('coll-auto-btn').addEventListener('click',()=>{
 document.getElementById('coll-check-btn').addEventListener('click',()=>checkCollisions());
 
 document.getElementById('coll-export-btn').addEventListener('click',()=>{
-  const json=JSON.stringify({proxies:collProxies},null,2);
+  const json=JSON.stringify({proxies:collProxies, groups:partGroups},null,2);
   const a=document.createElement('a');
   a.href='data:application/json,'+encodeURIComponent(json);
   a.download='collision.json'; a.click();
@@ -2023,6 +2057,7 @@ document.getElementById('coll-import-file').addEventListener('change',e=>{
     try{
       const data=JSON.parse(ev.target.result);
       collProxies=(data.proxies||[]).map(p=>({...p,id:nextProxyId++}));
+      if(data.groups) Object.assign(partGroups, data.groups);
       rebuildProxyWireframes();
       renderProxyList();
       document.getElementById('coll-status').textContent=`Loaded ${collProxies.length} proxies`;
