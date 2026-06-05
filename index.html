@@ -1907,18 +1907,16 @@ function checkCollisions(){
     }
   }
 
-  // Show in violations bar
+  // Show collision violations in a separate div, leave axis violations untouched
+  let collDiv = document.getElementById('coll-violations');
+  if(!collDiv){
+    collDiv = document.createElement('div');
+    collDiv.id = 'coll-violations';
+    document.getElementById('violations-list').after(collDiv);
+  }
+  collDiv.innerHTML = violations.map(v=>`<div style="color:#fca5a5;">💥 Collision: ${v}</div>`).join('');
   const bar=document.getElementById('violations-bar');
-  const list=document.getElementById('violations-list');
-  const existing=list.innerHTML;
-  // Separate collision violations from axis limit violations
-  const axisLines=Array.from(list.querySelectorAll('.axis-viol')).map(e=>e.outerHTML).join('');
-  let collHtml = violations.length
-    ? violations.map(v=>`<div style="color:#fca5a5;">💥 Collision: ${v}</div>`).join('')
-    : '';
-  list.innerHTML = axisLines + collHtml;
-  if(violations.length || list.innerHTML) bar.style.display='block';
-
+  if(violations.length) bar.style.display='block';
   document.getElementById('coll-status').textContent =
     violations.length ? `⚠ ${violations.length} collision(s) detected` : '✓ No collisions detected';
 }
@@ -1957,7 +1955,11 @@ function renderProxyList(){
     btn.addEventListener('click', e=>{
       const id=parseInt(e.target.dataset.id);
       collProxies=collProxies.filter(p=>p.id!==id);
-      if(proxyMeshes[id]){proxyMeshes[id].parent?.remove(proxyMeshes[id]);proxyMeshes[id].geometry.dispose();delete proxyMeshes[id];}
+      if(proxyMeshes[id]){
+        if(proxyMeshes[id].parent) proxyMeshes[id].parent.remove(proxyMeshes[id]);
+        proxyMeshes[id].traverse(c=>{if(c.geometry)c.geometry.dispose();});
+        delete proxyMeshes[id];
+      }
       renderProxyList();
     });
   });
