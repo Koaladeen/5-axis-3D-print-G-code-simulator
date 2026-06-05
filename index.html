@@ -406,6 +406,7 @@
       <div id="coll-groups-bar" style="padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>
       </div>
+      <div class="coll-header-row">
         <span>PART</span><span>GROUP</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>OFFSET X,Y,Z</span><span></span>
       </div>
       <div id="coll-list"></div>
@@ -1329,7 +1330,6 @@ function applyProgress(pct){
   updateNozzlePosition(moveIdx);
   updateBedRotation(moveIdx);
   updateMachine(moveIdx);
-  checkCollisions();
 }
 
 const TYPE_LABELS={e3:'3-axis extrude',e5:'5-axis extrude',travel:'Travel'};
@@ -1538,9 +1538,8 @@ function setPlaying(val){
 function stepForward(){
   const prog=document.getElementById('prog');
   const cur=parseInt(prog.value);
-  if(cur>=10000){ stopPlayback(); return; }
+  if(cur>=10000){ stopPlayback(); checkCollisions(); return; }
   const speed=parseInt(document.getElementById('pb-speed').value);
-  // speed slider 1-200 maps to 1-200 steps per tick
   const next=Math.min(10000, cur+speed);
   prog.value=next;
   applyProgress(next);
@@ -1912,17 +1911,17 @@ function checkCollisions(){
   }
 
   // Show collision violations in a separate div, leave axis violations untouched
+  const list = document.getElementById('violations-list');
   let collDiv = document.getElementById('coll-violations');
   if(!collDiv){
     collDiv = document.createElement('div');
     collDiv.id = 'coll-violations';
-    document.getElementById('violations-list').after(collDiv);
+    list.appendChild(collDiv);
   }
   collDiv.innerHTML = violations.map(v=>`<div style="color:#fca5a5;">💥 Collision: ${v}</div>`).join('');
-  const bar=document.getElementById('violations-bar');
-  const axisContent=document.getElementById('violations-list').innerHTML.trim();
-  if(violations.length || axisContent) bar.style.display='block';
-  else bar.style.display='none';
+  // Show bar if there's any content
+  const bar = document.getElementById('violations-bar');
+  bar.style.display = (list.textContent.trim()) ? 'block' : 'none';
   document.getElementById('coll-status').textContent =
     violations.length ? `⚠ ${violations.length} collision(s) detected` : '✓ No collisions detected';
 }
