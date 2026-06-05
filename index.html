@@ -1945,6 +1945,39 @@ function decomposeToHulls(pts, concavityThreshold=1.0){
   return [posGroup, negGroup];
 }
 
+// Extract only convex hull surface vertices from a point cloud
+// Reduces storage from 800+ points to typically 30-80 unique hull verts
+function extractHullVertices(pts){
+  if(pts.length < 4) return pts;
+  try{
+    const verts = pts.map(p => new THREE.Vector3(p[0],p[1],p[2]));
+    const hull = new THREE.ConvexHull();
+    hull.setFromPoints(verts);
+    // Collect unique vertices from hull faces
+    const seen = new Set();
+    const result = [];
+    for(const face of hull.faces){
+      let edge = face.edge;
+      do {
+        const v = edge.head().point;
+        const key = `${v.x.toFixed(4)},${v.y.toFixed(4)},${v.z.toFixed(4)}`;
+        if(!seen.has(key)){
+          seen.add(key);
+        result.push([
+          Math.round(v.x*100)/100,
+          Math.round(v.y*100)/100,
+          Math.round(v.z*100)/100
+        ]);
+        }
+        edge = edge.next;
+      } while(edge !== face.edge);
+    }
+    return result.length >= 4 ? result : pts;
+  } catch(e){
+    return pts; // fallback to all points if hull fails
+  }
+}
+
 // Auto-generate convex hull proxies for all loaded machine parts
 function autoGenerateHulls(){
   if(!machineLoaded){ document.getElementById('coll-status').textContent='Load a machine first'; return; }
@@ -1990,11 +2023,13 @@ function autoGenerateHulls(){
     for(let gi=0;gi<groups.length;gi++){
       const grp2=groups[gi];
       if(grp2.length<4) continue;
+      // Extract only convex hull surface vertices — drastically reduces storage
+      const hullVerts = extractHullVertices(grp2);
       collProxies.push({
         id:nextProxyId++,
         part:partName,
         type:'hull',
-        hullPoints:grp2,
+        hullPoints: hullVerts,
         sx:0,sy:0,sz:0,ox:0,oy:0,oz:0,
         label: groups.length>1 ? `${partName} hull ${gi+1}` : partName
       });
