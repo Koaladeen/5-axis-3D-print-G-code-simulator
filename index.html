@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+<meta name="screen-orientation" content="landscape">
 <title>5-Axis G-code Simulator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
@@ -390,21 +391,75 @@
   .s-mach-op::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 18px; border-radius: 2px; background: var(--ui-bg1); cursor: pointer; border: 1px solid var(--border-hi); }
 
   /* ── Mobile ── */
-  @media (max-width: 700px) {
-    html, body { overflow: auto; }
-    #app { grid-template-rows: auto 1fr; height: auto; min-height: 100vh; overflow: auto; }
-    #header { flex-wrap: wrap; height: auto; padding: 6px 8px; gap: 4px; }
+  /* ── Mobile — always landscape, compact ── */
+  @media (max-width: 900px) {
+    /* Force landscape orientation hint */
+    html, body { overflow: hidden; }
+
+    /* Lock to landscape: canvas fills most of screen, panels slim */
+    #app { grid-template-rows: 36px 1fr; height: 100vh; height: 100dvh; }
+
+    /* Compact header — single row, smaller elements */
+    #header { gap: 0; padding: 0; }
+    .logo-block { padding: 0 14px 0 10px; font-size: 11px; }
+    .tb-group { padding: 0 5px; gap: 1px; }
+    .tb-btn { font-size: 10px; padding: 0 7px; height: 26px; }
+    .tb-select { font-size: 10px; height: 24px; padding: 2px 4px; }
+    .tb-num { width: 42px; height: 24px; font-size: 10px; }
+    .tb-label { font-size: 9px; }
     #tb-fname { display: none; }
-    #body { grid-template-columns: 1fr; grid-template-rows: auto 60vw auto; overflow: visible; }
-    #jog-panel { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 2px solid var(--border); max-height: 200px; }
-    #canvas-col { height: 60vw; min-height: 260px; flex-shrink: 0; }
-    #cv-wrap { height: 100%; }
-    #right-panel { border-left: none; border-top: 2px solid var(--border); max-height: 320px; }
-    .modal-box, .modal-box.wide { width: calc(100vw - 16px); max-height: 90vh; }
+    #tb-status { font-size: 10px; padding: 0 6px; }
+    .chip { font-size: 9px; padding: 2px 6px; height: 22px; }
+
+    /* Body: narrow jog | canvas | narrow info */
+    #body { grid-template-columns: 140px 1fr 180px; overflow: hidden; }
+
+    /* Jog panel — compact */
+    #jog-panel { overflow-y: auto; }
+    .jp-header { padding: 4px 8px; font-size: 9px; }
+    .jog-axis { padding: 6px 8px; }
+    .jog-axis-name { font-size: 11px; }
+    .jog-axis-val { font-size: 10px; padding: 1px 5px; min-width: 58px; }
+    .jog-range-labels { font-size: 8px; }
+    #jog-home-btn { margin: 6px 8px; font-size: 10px; padding: 5px; }
+
+    /* Right panel — compact */
+    .ps-head { font-size: 9px; padding: 4px 8px; }
+    .ps-body { padding: 5px 8px; }
+    .ax-row { grid-template-columns: 14px 1fr 58px; gap: 4px; padding: 2px 0; }
+    .ax-lbl { font-size: 10px; }
+    .ax-num { font-size: 10px; }
+    .st-k { font-size: 10px; }
+    .st-v { font-size: 10px; }
+    #gcode-ctx { font-size: 9px; }
+    #coll-report { font-size: 9px; padding: 4px 8px; }
+    #right-panel { width: 180px; }
+
+    /* Timeline — compact */
+    #progress-area { padding: 4px 10px 6px; gap: 4px; }
+    .prog-meta { font-size: 9px; }
+    .prog-meta .val { font-size: 10px; }
+    .pb-btn { width: 24px; height: 22px; font-size: 11px; }
+    .pb-spd-label, .pb-spd-val { font-size: 9px; }
+
+    /* Modals full-width */
+    .modal-box, .modal-box.wide { width: calc(100vw - 24px); max-height: 90vh; }
+  }
+
+  /* Portrait warning overlay */
+  @media (orientation: portrait) and (max-width: 900px) {
+    #portrait-warn { display: flex !important; }
   }
 </style>
 </head>
 <body>
+<!-- Portrait warning -->
+<div id="portrait-warn" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--ui-bg1);flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:var(--mono);">
+  <div style="font-size:48px;">⟳</div>
+  <div style="font-size:14px;color:var(--text0);letter-spacing:0.1em;">ROTATE DEVICE</div>
+  <div style="font-size:11px;color:var(--text2);">5AXIS.SIM requires landscape orientation</div>
+</div>
+
 <div id="app">
 
   <!-- Titlebar -->
@@ -2401,6 +2456,11 @@ document.getElementById('coll-import-file').addEventListener('change',e=>{
 initThree();
 initStaticSceneLate();
 fetchMachineList();
+
+// Lock to landscape on mobile
+if(screen.orientation && screen.orientation.lock){
+  screen.orientation.lock('landscape').catch(()=>{});
+}
 
 // ── Axis jog panel ────────────────────────────────────────────────
 const JOG_AXES = [
