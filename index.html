@@ -1873,7 +1873,11 @@ function spheresOverlap(a, b){
 }
 
 function checkCollisions(){
-  if(!collisionEnabled || !collProxies.length || !machineLoaded) return;
+  if(!collisionEnabled || !collProxies.length || !machineLoaded){
+    const collDiv=document.getElementById('coll-violations');
+    if(collDiv) collDiv.innerHTML='';
+    return;
+  }
   rootGroup.updateMatrixWorld(true);
 
   const violations = [];
@@ -1916,7 +1920,9 @@ function checkCollisions(){
   }
   collDiv.innerHTML = violations.map(v=>`<div style="color:#fca5a5;">💥 Collision: ${v}</div>`).join('');
   const bar=document.getElementById('violations-bar');
-  if(violations.length) bar.style.display='block';
+  const axisContent=document.getElementById('violations-list').innerHTML.trim();
+  if(violations.length || axisContent) bar.style.display='block';
+  else bar.style.display='none';
   document.getElementById('coll-status').textContent =
     violations.length ? `⚠ ${violations.length} collision(s) detected` : '✓ No collisions detected';
 }
