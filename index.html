@@ -978,7 +978,7 @@ function updateMachine(moveIdx){
   machineGroup.position.set(ox, oz, -oy); // apply in Three.js coords
 
   // Bed side: Z↑, B rotates Y, C IS the bed (rotates on B-local Y)
-  if(mGrp.Z) mGrp.Z.position.set(0, mz, 0);
+  if(mGrp.Z) mGrp.Z.position.set(0, -mz, 0);
   if(mGrp.B){ mGrp.B.rotation.set(0,0,0); mGrp.B.rotateZ(-mb*Math.PI/180); }
   if(mGrp.C){ mGrp.C.rotation.set(0,0,0); mGrp.C.rotateY(-mc*Math.PI/180); }
 
