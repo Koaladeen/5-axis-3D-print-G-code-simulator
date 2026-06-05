@@ -2261,6 +2261,7 @@ function checkCollisions(){
   scene.updateMatrixWorld(true);
 
   const violations=[];
+  const loopDebug=[];
   for(const proxy of collProxies) setProxyColliding(proxy.id,false);
   const proxiesByPart={};
   for(const p of collProxies){
@@ -2271,12 +2272,16 @@ function checkCollisions(){
   for(let i=0;i<parts.length;i++){
     for(let j=i+1;j<parts.length;j++){
       const pA=parts[i],pB=parts[j];
-      if(!shouldCheck(pA,pB)) continue;
+      const chk=shouldCheck(pA,pB);
+      if(!chk) continue;
       for(const pa of proxiesByPart[pA]){
         for(const pb of proxiesByPart[pB]){
+          scene.updateMatrixWorld(true);
           const wA=getProxyWorldPts(pa),wB=getProxyWorldPts(pb);
           if(!wA||!wB||!wA.length||!wB.length) continue;
-          if(pointCloudsOverlap(wA,wB)){
+          const hit=pointCloudsOverlap(wA,wB);
+          loopDebug.push(`${pA}vs${pB}:${hit?'HIT':'miss'}`);
+          if(hit){
             const key=pA+' <-> '+pB;
             if(!violations.includes(key)) violations.push(key);
             setProxyColliding(pa.id,true);
@@ -2286,6 +2291,7 @@ function checkCollisions(){
       }
     }
   }
+  document.getElementById('coll-status').textContent=loopDebug.join(' | ')||'no pairs checked';
   if(report){
     if(violations.length){
       report.innerHTML=violations.map(v=>'<div style="color:var(--red);">! '+v+'</div>').join('');
