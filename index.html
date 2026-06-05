@@ -2260,39 +2260,6 @@ function checkCollisions(){
   machineGroup.visible=true;
   scene.updateMatrixWorld(true);
 
-  // Debug info shown in report panel
-  let debugLines = [`${collProxies.length} proxies`];
-  for(let i=0;i<Math.min(3,collProxies.length);i++){
-    const wA=getProxyWorldPts(collProxies[i]);
-    const allZero = wA && wA.every(p=>Math.abs(p[0])<0.1&&Math.abs(p[1])<0.1&&Math.abs(p[2])<0.1);
-    const first = wA&&wA.length>0 ? wA[0].map(v=>v.toFixed(1)).join(',') : 'null';
-    debugLines.push(`[${i}]${collProxies[i].part} G${partGroups[collProxies[i].part]??1}: ${wA?wA.length+'pts':0} ${allZero?'ZERO!':first}`);
-  }
-  // Also test first cross-group pair directly
-  const debugParts=Object.keys(collProxies.reduce((a,p)=>{a[p.part]=1;return a},{}));
-  for(let i=0;i<debugParts.length;i++) for(let j=i+1;j<debugParts.length;j++){
-    if(shouldCheck(debugParts[i],debugParts[j])){
-      debugLines.push(`Testing: ${debugParts[i]}<->${debugParts[j]}`);
-      const pa=collProxies.find(p=>p.part===debugParts[i]);
-      const pb=collProxies.find(p=>p.part===debugParts[j]);
-      if(pa&&pb){
-        const wA=getProxyWorldPts(pa),wB=getProxyWorldPts(pb);
-        if(wA&&wB){
-          let axMin=Infinity,axMax=-Infinity,bxMin=Infinity,bxMax=-Infinity;
-          let ayMin=Infinity,ayMax=-Infinity,byMin=Infinity,byMax=-Infinity;
-          let azMin=Infinity,azMax=-Infinity,bzMin=Infinity,bzMax=-Infinity;
-          for(const p of wA){if(p[0]<axMin)axMin=p[0];if(p[0]>axMax)axMax=p[0];if(p[1]<ayMin)ayMin=p[1];if(p[1]>ayMax)ayMax=p[1];if(p[2]<azMin)azMin=p[2];if(p[2]>azMax)azMax=p[2];}
-          for(const p of wB){if(p[0]<bxMin)bxMin=p[0];if(p[0]>bxMax)bxMax=p[0];if(p[1]<byMin)byMin=p[1];if(p[1]>byMax)byMax=p[1];if(p[2]<bzMin)bzMin=p[2];if(p[2]>bzMax)bzMax=p[2];}
-          debugLines.push(`A x:[${axMin.toFixed(0)},${axMax.toFixed(0)}] y:[${ayMin.toFixed(0)},${ayMax.toFixed(0)}] z:[${azMin.toFixed(0)},${azMax.toFixed(0)}]`);
-          debugLines.push(`B x:[${bxMin.toFixed(0)},${bxMax.toFixed(0)}] y:[${byMin.toFixed(0)},${byMax.toFixed(0)}] z:[${bzMin.toFixed(0)},${bzMax.toFixed(0)}]`);
-          debugLines.push(`overlap=${pointCloudsOverlap(wA,wB)}`);
-        }
-      }
-      break;
-    }
-  }
-  if(report) report.innerHTML=debugLines.map(l=>`<div style="font-size:9px">${l}</div>`).join('');
-  document.getElementById('coll-status').textContent = debugLines.join(' | ');
   const violations=[];
   for(const proxy of collProxies) setProxyColliding(proxy.id,false);
   const proxiesByPart={};
@@ -2308,8 +2275,8 @@ function checkCollisions(){
       for(const pa of proxiesByPart[pA]){
         for(const pb of proxiesByPart[pB]){
           const wA=getProxyWorldPts(pa),wB=getProxyWorldPts(pb);
-          if(!wA||!wB) continue;
-          if(gjkOverlap(wA,wB)){
+          if(!wA||!wB||!wA.length||!wB.length) continue;
+          if(pointCloudsOverlap(wA,wB)){
             const key=pA+' <-> '+pB;
             if(!violations.includes(key)) violations.push(key);
             setProxyColliding(pa.id,true);
