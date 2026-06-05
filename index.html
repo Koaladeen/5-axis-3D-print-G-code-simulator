@@ -1910,21 +1910,21 @@ function autoGenerateHulls(){
 
     // Only direct mesh children of this group — not meshes from child groups (which are other parts)
     const allPts=[];
-    const localMatInv = new THREE.Matrix4().copy(grp.matrixWorld).invert();
+    // Store points in the mesh's own LOCAL geometry space (no world transform)
+    // getProxyWorldPts will apply matrixWorld at check time when it's valid
 
     for(const child of grp.children){
       if(!child.isMesh) continue;
       const pos=child.geometry?.attributes?.position; if(!pos) continue;
       const total=pos.count;
-      const step=Math.max(1,Math.floor(total/800)); // increased sample density
-      const toLocal=new THREE.Matrix4().copy(localMatInv).multiply(child.matrixWorld);
+      const step=Math.max(1,Math.floor(total/800));
       const v=new THREE.Vector3();
 
       // Always include extreme points in all 6 directions for tight bounds
       let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
       const extremes={};
       for(let i=0;i<total;i++){
-        v.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(toLocal);
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i));
         if(v.x<minX){minX=v.x;extremes.xn=[v.x,v.y,v.z];}
         if(v.x>maxX){maxX=v.x;extremes.xp=[v.x,v.y,v.z];}
         if(v.y<minY){minY=v.y;extremes.yn=[v.x,v.y,v.z];}
@@ -1932,12 +1932,10 @@ function autoGenerateHulls(){
         if(v.z<minZ){minZ=v.z;extremes.zn=[v.x,v.y,v.z];}
         if(v.z>maxZ){maxZ=v.z;extremes.zp=[v.x,v.y,v.z];}
       }
-      // Add extreme points first
       Object.values(extremes).forEach(p=>allPts.push(p));
 
-      // Then sampled points
       for(let i=0;i<total;i+=step){
-        v.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(toLocal);
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i));
         allPts.push([v.x,v.y,v.z]);
       }
     }
@@ -2087,9 +2085,16 @@ function setProxyWireframesVisible(v){
 
 function getProxyWorldPts(proxy){
   const grp=mGrp[proxy.part]; if(!grp) return null;
-  const mat=grp.matrixWorld;
   const v=new THREE.Vector3();
+
   if(proxy.type==='hull'&&proxy.hullPoints){
+    // Hull points are in raw geometry space — apply mesh's matrixWorld
+    // The direct mesh child has rotation.x=-PI/2 applied, so use its matrixWorld
+    let meshMat=null;
+    for(const child of grp.children){
+      if(child.isMesh){meshMat=child.matrixWorld; break;}
+    }
+    const mat = meshMat || grp.matrixWorld;
     return proxy.hullPoints.map(p=>{ v.set(p[0],p[1],p[2]).applyMatrix4(mat); return [v.x,v.y,v.z]; });
   }
   const cx=proxy.ox||0,cy=proxy.oy||0,cz=proxy.oz||0;
@@ -2207,13 +2212,17 @@ function checkCollisions(){
   scene.updateMatrixWorld(true);
 
   // Debug info shown in report panel
-  let debugInfo = `${collProxies.length} proxies, ${Object.keys(partGroups).filter(k=>partGroups[k]>0).length} active parts`;
-  if(collProxies.length>=1){
-    const wA=getProxyWorldPts(collProxies[0]);
-    debugInfo += ` | proxy[0] ${collProxies[0].part}(G${partGroups[collProxies[0].part]??1}): ${wA?wA.length+' pts':'null'}`;
-    if(wA) debugInfo += ` first=[${wA[0].map(v=>v.toFixed(1)).join(',')}]`;
+  let debugLines = [`${collProxies.length} proxies loaded`];
+  for(let i=0;i<Math.min(2,collProxies.length);i++){
+    const wA=getProxyWorldPts(collProxies[i]);
+    const allZero = wA && wA.every(p=>Math.abs(p[0])<0.01&&Math.abs(p[1])<0.01&&Math.abs(p[2])<0.01);
+    debugLines.push(`[${i}] ${collProxies[i].part} G${partGroups[collProxies[i].part]??1}: ${wA?wA.length+' pts':'null'} ${allZero?'ALL ZERO!':wA?wA[0].map(v=>v.toFixed(1)).join(','):''}`);
   }
-  if(report) report.innerHTML=`<span style="color:var(--text2);font-size:9px;">${debugInfo}</span>`;
+  if(collProxies.length>=2){
+    const [pA,pB]=[collProxies[0],collProxies[1]];
+    debugLines.push(`shouldCheck(${pA.part},${pB.part})=${shouldCheck(pA.part,pB.part)}`);
+  }
+  if(report) report.innerHTML=debugLines.map(l=>`<div>${l}</div>`).join('');
   const violations=[];
   for(const proxy of collProxies) setProxyColliding(proxy.id,false);
   const proxiesByPart={};
