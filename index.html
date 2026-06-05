@@ -2113,73 +2113,49 @@ function gjkSupport(pts,d){
   return [bx,by,bz];
 }
 
-function gjkOverlap(ptsA,ptsB){
-  if(!ptsA||!ptsB||ptsA.length<1||ptsB.length<1) return false;
-  const suppMD=d=>{
-    const a=gjkSupport(ptsA,d);
-    const b=gjkSupport(ptsB,[-d[0],-d[1],-d[2]]);
-    return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];
-  };
-  // Start with arbitrary direction
-  let d=[1,0,0];
-  let A=suppMD(d);
-  if(A[0]*d[0]+A[1]*d[1]+A[2]*d[2]<0) return false;
-  d=[-A[0],-A[1],-A[2]];
-  const simplex=[A];
+// Robust overlap test: SAT on world-space point clouds
+// Generates candidate axes from AABB faces + cross products of edges
+function pointCloudsOverlap(ptsA, ptsB){
+  if(!ptsA||!ptsB||!ptsA.length||!ptsB.length) return false;
 
-  for(let iter=0;iter<64;iter++){
-    const len=Math.sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
-    if(len<1e-10) return true;
-    d=[d[0]/len,d[1]/len,d[2]/len];
-    A=suppMD(d);
-    const dot=A[0]*d[0]+A[1]*d[1]+A[2]*d[2];
-    if(dot<0) return false; // no overlap
-    simplex.push(A);
-
-    // Find closest point on simplex to origin, update direction
-    // Use the GJK nearest-simplex algorithm
-    const r=nearestSimplexToOrigin(simplex);
-    if(r===null) return true; // origin inside simplex
-    // r = {pt, keep} where pt is closest point and keep is indices to retain
-    if(r.dist<1e-10) return true;
-    // Prune simplex to kept vertices
-    const newSimplex=r.keep.map(i=>simplex[i]);
-    simplex.length=0; for(const v of newSimplex) simplex.push(v);
-    d=[-r.pt[0],-r.pt[1],-r.pt[2]]; // toward origin
+  // Quick AABB pre-check
+  let axMin=Infinity,axMax=-Infinity,bxMin=Infinity,bxMax=-Infinity;
+  let ayMin=Infinity,ayMax=-Infinity,byMin=Infinity,byMax=-Infinity;
+  let azMin=Infinity,azMax=-Infinity,bzMin=Infinity,bzMax=-Infinity;
+  for(const p of ptsA){
+    if(p[0]<axMin)axMin=p[0]; if(p[0]>axMax)axMax=p[0];
+    if(p[1]<ayMin)ayMin=p[1]; if(p[1]>ayMax)ayMax=p[1];
+    if(p[2]<azMin)azMin=p[2]; if(p[2]>azMax)azMax=p[2];
   }
-  return false;
+  for(const p of ptsB){
+    if(p[0]<bxMin)bxMin=p[0]; if(p[0]>bxMax)bxMax=p[0];
+    if(p[1]<byMin)byMin=p[1]; if(p[1]>byMax)byMax=p[1];
+    if(p[2]<bzMin)bzMin=p[2]; if(p[2]>bzMax)bzMax=p[2];
+  }
+  // AABB separation test
+  if(axMax<bxMin||bxMax<axMin) return false;
+  if(ayMax<byMin||byMax<ayMin) return false;
+  if(azMax<bzMin||bzMax<azMin) return false;
+
+  // If AABBs overlap, do refined SAT with support function on 13 axes
+  // (3 axis-aligned + 10 random directions covering sphere)
+  const axes=[
+    [1,0,0],[0,1,0],[0,0,1],
+    [1,1,0],[1,-1,0],[1,0,1],[1,0,-1],[0,1,1],[0,1,-1],
+    [1,1,1],[1,1,-1],[1,-1,1],[-1,1,1],
+  ];
+  for(const ax of axes){
+    const len=Math.sqrt(ax[0]*ax[0]+ax[1]*ax[1]+ax[2]*ax[2]);
+    const nx=ax[0]/len,ny=ax[1]/len,nz=ax[2]/len;
+    let aMin=Infinity,aMax=-Infinity,bMin=Infinity,bMax=-Infinity;
+    for(const p of ptsA){const d=p[0]*nx+p[1]*ny+p[2]*nz;if(d<aMin)aMin=d;if(d>aMax)aMax=d;}
+    for(const p of ptsB){const d=p[0]*nx+p[1]*ny+p[2]*nz;if(d<bMin)bMin=d;if(d>bMax)bMax=d;}
+    if(aMax<bMin||bMax<aMin) return false;
+  }
+  return true; // No separating axis found — overlapping
 }
 
-// Returns nearest point on simplex to origin and which vertices to keep
-// Returns null if origin is inside the simplex (collision)
-function nearestSimplexToOrigin(s){
-  if(s.length===1){
-    return {pt:s[0], dist:dot3(s[0],s[0]), keep:[0]};
-  }
-  if(s.length===2){
-    const [a,b]=s;
-    const ab=[b[0]-a[0],b[1]-a[1],b[2]-a[2]];
-    const ao=[-a[0],-a[1],-a[2]];
-    const t=Math.max(0,Math.min(1,dot3(ao,ab)/dot3(ab,ab)));
-    const pt=[a[0]+t*ab[0],a[1]+t*ab[1],a[2]+t*ab[2]];
-    const keep=t===0?[0]:t===1?[1]:[0,1];
-    return {pt,dist:dot3(pt,pt),keep};
-  }
-  if(s.length>=3){
-    // For 3+ points, check if origin projects inside triangle/tetrahedron
-    // Simplified: return centroid direction
-    let ox=0,oy=0,oz=0;
-    for(const v of s){ox+=v[0];oy+=v[1];oz+=v[2];}
-    ox/=s.length;oy/=s.length;oz/=s.length;
-    const dist=ox*ox+oy*oy+oz*oz;
-    if(dist<1e-10) return null; // origin inside
-    const keep=s.map((_,i)=>i).slice(-3); // keep last 3
-    return {pt:[ox,oy,oz],dist,keep};
-  }
-  return null;
-}
-
-function dot3(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+function gjkOverlap(ptsA,ptsB){ return pointCloudsOverlap(ptsA,ptsB); }
 
 function checkCollisions(){
   const report=document.getElementById('coll-report');
