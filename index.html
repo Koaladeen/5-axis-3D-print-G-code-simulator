@@ -807,14 +807,14 @@ function buildNozzle(){
 
 // Canonical bed quaternion for machine frame (bed tilts away from nozzle)
 function calcBedQuat(bRad, cRad){
-  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1), -bRad);
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad);
   const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0), -cRad);
   return new THREE.Quaternion().copy(qB).multiply(qC);
 }
 
 // Part frame nozzle: same as calcBedQuat but C flipped
 function calcNozzlePartQuat(bRad, cRad){
-  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad);
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1), -bRad);
   const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0),  cRad);
   return new THREE.Quaternion().copy(qB).multiply(qC);
 }
