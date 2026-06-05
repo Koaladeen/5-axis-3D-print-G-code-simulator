@@ -1664,17 +1664,31 @@ function autoGenerateHulls(){
     const localMatInv = new THREE.Matrix4().copy(grp.matrixWorld).invert();
 
     for(const child of grp.children){
-      // Only process direct Mesh children, skip Group children (those are sub-parts or proxies)
       if(!child.isMesh) continue;
       const pos=child.geometry?.attributes?.position; if(!pos) continue;
       const total=pos.count;
-      const step=Math.max(1,Math.floor(total/300));
-      // Transform from mesh local → world → part local
+      const step=Math.max(1,Math.floor(total/800)); // increased sample density
       const toLocal=new THREE.Matrix4().copy(localMatInv).multiply(child.matrixWorld);
       const v=new THREE.Vector3();
+
+      // Always include extreme points in all 6 directions for tight bounds
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
+      const extremes={};
+      for(let i=0;i<total;i++){
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(toLocal);
+        if(v.x<minX){minX=v.x;extremes.xn=[v.x,v.y,v.z];}
+        if(v.x>maxX){maxX=v.x;extremes.xp=[v.x,v.y,v.z];}
+        if(v.y<minY){minY=v.y;extremes.yn=[v.x,v.y,v.z];}
+        if(v.y>maxY){maxY=v.y;extremes.yp=[v.x,v.y,v.z];}
+        if(v.z<minZ){minZ=v.z;extremes.zn=[v.x,v.y,v.z];}
+        if(v.z>maxZ){maxZ=v.z;extremes.zp=[v.x,v.y,v.z];}
+      }
+      // Add extreme points first
+      Object.values(extremes).forEach(p=>allPts.push(p));
+
+      // Then sampled points
       for(let i=0;i<total;i+=step){
-        v.set(pos.getX(i),pos.getY(i),pos.getZ(i));
-        v.applyMatrix4(toLocal);
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(toLocal);
         allPts.push([v.x,v.y,v.z]);
       }
     }
