@@ -1642,25 +1642,36 @@ function autoGenerateHulls(){
   // Clear existing hull proxies (keep manual ones)
   collProxies = collProxies.filter(p=>p.type!=='hull');
 
+  // Skip Frame (complex) and only use direct mesh children (not grandchildren = child parts)
+  const SKIP_AUTO = new Set(['Frame']);
   let count=0;
+
+  rootGroup.updateMatrixWorld(true);
+
   for(const partName of MACHINE_PARTS){
+    if(SKIP_AUTO.has(partName)) continue;
     const grp = mGrp[partName]; if(!grp) continue;
-    // Collect all mesh vertices in part-local space
+
+    // Only direct mesh children of this group — not meshes from child groups (which are other parts)
     const allPts=[];
-    grp.traverse(c=>{
-      if(!c.isMesh || c.userData.isProxyMesh) return;
-      // Transform vertices into part group's local space
-      const pos=c.geometry.attributes.position; if(!pos) return;
+    const localMatInv = new THREE.Matrix4().copy(grp.matrixWorld).invert();
+
+    for(const child of grp.children){
+      // Only process direct Mesh children, skip Group children (those are sub-parts or proxies)
+      if(!child.isMesh) continue;
+      const pos=child.geometry?.attributes?.position; if(!pos) continue;
       const total=pos.count;
       const step=Math.max(1,Math.floor(total/300));
-      const localMat = new THREE.Matrix4().copy(grp.matrixWorld).invert().multiply(c.matrixWorld);
+      // Transform from mesh local → world → part local
+      const toLocal=new THREE.Matrix4().copy(localMatInv).multiply(child.matrixWorld);
       const v=new THREE.Vector3();
       for(let i=0;i<total;i+=step){
         v.set(pos.getX(i),pos.getY(i),pos.getZ(i));
-        v.applyMatrix4(localMat);
+        v.applyMatrix4(toLocal);
         allPts.push([v.x,v.y,v.z]);
       }
-    });
+    }
+
     if(allPts.length<4) continue;
 
     collProxies.push({
