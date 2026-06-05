@@ -855,7 +855,7 @@ function updateNozzlePosition(moveIdx){
     nozzleMesh.position.set(wx,wz,-wy);
     nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
   } else {
-    nozzleMesh.position.set(m.mx, m.mz, -m.my);
+    nozzleMesh.position.set(m.mx, 0, -m.my);
     nozzleMesh.quaternion.set(0,0,0,1);
   }
 }
