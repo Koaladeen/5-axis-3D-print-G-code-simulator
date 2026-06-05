@@ -826,15 +826,17 @@ function calcNozzleQuat(bRad, cRad){
   return new THREE.Quaternion().copy(qB).multiply(qC).conjugate();
 }
 
-// Apply B/C rotation to bedGroup in machine frame, reset in part frame
+// Apply B/C rotation and Z translation to bedGroup in machine frame
 function updateBedRotation(moveIdx){
   const usePart = document.getElementById('viewMode').value==='part';
   if(usePart || !allMoves.length || moveIdx===0){
     bedGroup.quaternion.set(0,0,0,1);
+    bedGroup.position.set(0,0,0);
     return;
   }
   const m = allMoves[Math.min(moveIdx-1, allMoves.length-1)];
   bedGroup.quaternion.copy(calcBedQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
+  bedGroup.position.set(0, -m.mz, 0); // Z moves bed down, same as machine model
 }
 
 // Update nozzle position to current move's world coords
