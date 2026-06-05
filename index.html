@@ -299,6 +299,21 @@
   /* ── Modals ── */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; }
   .modal-overlay.open { display: flex; }
+
+  /* Collision modal — floating, no backdrop, pointer-events pass through */
+  #coll-overlay {
+    display: none; position: fixed; inset: 0;
+    background: none; z-index: 100;
+    pointer-events: none; /* canvas stays interactive */
+  }
+  #coll-overlay.open { display: block; }
+  #coll-modal {
+    pointer-events: all; /* modal itself is interactive */
+    position: absolute; top: 60px; left: 220px;
+    cursor: default; user-select: none;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+  #coll-modal .modal-head { cursor: move; }
   .modal-box {
     background: var(--ui-bg0); border: 1px solid var(--border-hi);
     border-top: 3px solid var(--accent);
@@ -1918,14 +1933,19 @@ function autoGenerateHulls(){
   document.getElementById('coll-status').textContent=`Generated ${count} convex hull proxies`;
 }
 
+// Proxies visible only when: modal is open OR "Show proxies" checkbox explicitly checked
+function shouldShowProxies(){
+  return collConfigOpen || (document.getElementById('coll-show-proxies')?.checked ?? false);
+}
+
 function rebuildProxyWireframes(){
   Object.values(proxyMeshes).forEach(m=>{if(m.parent)m.parent.remove(m);});
   proxyMeshes={};
-  const show=document.getElementById('coll-show-proxies')?.checked;
+  const show = shouldShowProxies();
   for(const proxy of collProxies){
     const grp=mGrp[proxy.part]; if(!grp) continue;
     const mesh=makeProxyMesh(proxy);
-    mesh.visible=!!show;
+    mesh.visible=show;
     grp.add(mesh);
     proxyMeshes[proxy.id]=mesh;
   }
@@ -1934,6 +1954,7 @@ function rebuildProxyWireframes(){
 function setProxyWireframesVisible(v){
   Object.values(proxyMeshes).forEach(m=>m.visible=v);
 }
+
 
 function setProxyColliding(id, colliding){
   const mesh=proxyMeshes[id]; if(!mesh) return;
@@ -2016,12 +2037,12 @@ function rebuildProxyWireframes(){
     m.traverse(c=>{ if(c.geometry) c.geometry.dispose(); });
   });
   proxyMeshes={};
-  const show = document.getElementById('coll-show-proxies')?.checked;
+  const show = shouldShowProxies();
   for(const proxy of collProxies){
     const grp = mGrp[proxy.part];
     if(!grp) continue;
     const mesh = makeProxyMesh(proxy);
-    mesh.visible = !!show;
+    mesh.visible = show;
     grp.add(mesh);
     proxyMeshes[proxy.id] = mesh;
   }
@@ -2210,6 +2231,7 @@ function updateProxy(el){
 // ── Modal wiring ──────────────────────────────────────────────────
 document.getElementById('collBtn').addEventListener('click',()=>{
   collConfigOpen=true;
+  setProxyWireframesVisible(true); // always show when modal opens
   // Populate groups bar
   const bar=document.getElementById('coll-groups-bar');
   bar.innerHTML='<span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>';
@@ -2242,15 +2264,32 @@ document.getElementById('collBtn').addEventListener('click',()=>{
 document.getElementById('collClose').addEventListener('click',()=>{
   collConfigOpen=false;
   clearPartHighlight();
+  setProxyWireframesVisible(shouldShowProxies()); // respect checkbox
   document.getElementById('coll-overlay').classList.remove('open');
 });
-document.getElementById('coll-overlay').addEventListener('click',e=>{
-  if(e.target===e.currentTarget){
-    collConfigOpen=false;
-    clearPartHighlight();
-    e.currentTarget.classList.remove('open');
-  }
-});
+// coll-overlay click — no-op (no backdrop to click)
+document.getElementById('coll-overlay').addEventListener('click',e=>{ if(e.target===e.currentTarget) e.stopPropagation(); });
+
+// ── Draggable collision modal ─────────────────────────────────────
+(function(){
+  const modal = document.getElementById('coll-modal');
+  const handle = modal.querySelector('.modal-head');
+  let dragging=false, ox=0, oy=0;
+  handle.addEventListener('mousedown', e=>{
+    if(e.target.classList.contains('close-btn')) return;
+    dragging=true;
+    const rect=modal.getBoundingClientRect();
+    ox=e.clientX-rect.left; oy=e.clientY-rect.top;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    const x=e.clientX-ox, y=e.clientY-oy;
+    modal.style.left=Math.max(0,x)+'px';
+    modal.style.top=Math.max(0,y)+'px';
+  });
+  window.addEventListener('mouseup', ()=>{ dragging=false; });
+})();
 
 document.getElementById('coll-show-proxies').addEventListener('change',function(){
   setProxyWireframesVisible(this.checked);
