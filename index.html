@@ -2269,12 +2269,12 @@ function checkCollisions(){
     debugLines.push(`[${i}]${collProxies[i].part} G${partGroups[collProxies[i].part]??1}: ${wA?wA.length+'pts':0} ${allZero?'ZERO!':first}`);
   }
   // Also test first cross-group pair directly
-  const parts=Object.keys(collProxies.reduce((a,p)=>{a[p.part]=1;return a},{}));
-  for(let i=0;i<parts.length;i++) for(let j=i+1;j<parts.length;j++){
-    if(shouldCheck(parts[i],parts[j])){
-      debugLines.push(`Testing: ${parts[i]}<->${parts[j]}`);
-      const pa=collProxies.find(p=>p.part===parts[i]);
-      const pb=collProxies.find(p=>p.part===parts[j]);
+  const debugParts=Object.keys(collProxies.reduce((a,p)=>{a[p.part]=1;return a},{}));
+  for(let i=0;i<debugParts.length;i++) for(let j=i+1;j<debugParts.length;j++){
+    if(shouldCheck(debugParts[i],debugParts[j])){
+      debugLines.push(`Testing: ${debugParts[i]}<->${debugParts[j]}`);
+      const pa=collProxies.find(p=>p.part===debugParts[i]);
+      const pb=collProxies.find(p=>p.part===debugParts[j]);
       if(pa&&pb){
         const wA=getProxyWorldPts(pa),wB=getProxyWorldPts(pb);
         if(wA&&wB) debugLines.push(`overlap=${pointCloudsOverlap(wA,wB)} ptsA=${wA.length} ptsB=${wB.length}`);
