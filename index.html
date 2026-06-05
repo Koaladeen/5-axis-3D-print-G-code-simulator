@@ -1908,35 +1908,23 @@ function autoGenerateHulls(){
     if(SKIP_AUTO.has(partName)) continue;
     const grp = mGrp[partName]; if(!grp) continue;
 
-    // Only direct mesh children of this group — not meshes from child groups (which are other parts)
     const allPts=[];
-    // Store points in the mesh's own LOCAL geometry space (no world transform)
-    // getProxyWorldPts will apply matrixWorld at check time when it's valid
-
     for(const child of grp.children){
       if(!child.isMesh) continue;
       const pos=child.geometry?.attributes?.position; if(!pos) continue;
       const total=pos.count;
       const step=Math.max(1,Math.floor(total/800));
       const v=new THREE.Vector3();
-
-      // Always include extreme points in all 6 directions for tight bounds
-      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
-      const extremes={};
-      for(let i=0;i<total;i++){
-        v.set(pos.getX(i),pos.getY(i),pos.getZ(i));
-        if(v.x<minX){minX=v.x;extremes.xn=[v.x,v.y,v.z];}
-        if(v.x>maxX){maxX=v.x;extremes.xp=[v.x,v.y,v.z];}
-        if(v.y<minY){minY=v.y;extremes.yn=[v.x,v.y,v.z];}
-        if(v.y>maxY){maxY=v.y;extremes.yp=[v.x,v.y,v.z];}
-        if(v.z<minZ){minZ=v.z;extremes.zn=[v.x,v.y,v.z];}
-        if(v.z>maxZ){maxZ=v.z;extremes.zp=[v.x,v.y,v.z];}
-      }
-      Object.values(extremes).forEach(p=>allPts.push(p));
-
+      // Apply only the child's LOCAL matrix (e.g. rotation.x=-PI/2) to get part-group local coords
+      const localMat=child.matrix;
       for(let i=0;i<total;i+=step){
-        v.set(pos.getX(i),pos.getY(i),pos.getZ(i));
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(localMat);
         allPts.push([v.x,v.y,v.z]);
+      }
+      // Also include extreme points
+      for(let i=0;i<total;i++){
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(localMat);
+        if(i===0||v.x<allPts[0][0]) allPts.push([v.x,v.y,v.z]);
       }
     }
 
@@ -2088,13 +2076,8 @@ function getProxyWorldPts(proxy){
   const v=new THREE.Vector3();
 
   if(proxy.type==='hull'&&proxy.hullPoints){
-    // Hull points are in raw geometry space — apply mesh's matrixWorld
-    // The direct mesh child has rotation.x=-PI/2 applied, so use its matrixWorld
-    let meshMat=null;
-    for(const child of grp.children){
-      if(child.isMesh){meshMat=child.matrixWorld; break;}
-    }
-    const mat = meshMat || grp.matrixWorld;
+    // Points are in part-group local space — apply group's world matrix for current kinematics
+    const mat=grp.matrixWorld;
     return proxy.hullPoints.map(p=>{ v.set(p[0],p[1],p[2]).applyMatrix4(mat); return [v.x,v.y,v.z]; });
   }
   const cx=proxy.ox||0,cy=proxy.oy||0,cz=proxy.oz||0;
