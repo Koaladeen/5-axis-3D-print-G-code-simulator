@@ -959,6 +959,7 @@ async function loadMachine(machineName){
   machineLoaded=true;
   currentMachineName=machineName;
   document.getElementById('status').textContent='';
+  setSimpleSceneVisible(false);
   updateMachine(0);
 }
 
@@ -1375,6 +1376,17 @@ document.getElementById('nozzle').addEventListener('change',()=>rebuildAll(false
 document.getElementById('sc').addEventListener('change',()=>rebuildAll(false));
 ['se','s5','st'].forEach(id=>document.getElementById(id).addEventListener('change',()=>rebuildAll(false)));
 
+// Show/hide the simple buildplate and nozzle cone
+function setSimpleSceneVisible(visible){
+  if(buildplateMesh) buildplateMesh.visible = visible;
+  const grid = bedGroup.getObjectByName('bp-grid');
+  if(grid) grid.visible = visible;
+  if(nozzleMesh) nozzleMesh.visible = visible;
+  // also reflect in settings checkboxes so they stay in sync
+  document.getElementById('s-bp-vis').checked = visible;
+  document.getElementById('s-nz-vis').checked = visible;
+}
+
 // Machine toggle
 document.getElementById('showMach').addEventListener('change', function(){
   document.getElementById('chip-mach').classList.toggle('on', this.checked);
@@ -1383,14 +1395,24 @@ document.getElementById('showMach').addEventListener('change', function(){
     if(name) loadMachine(name);
   } else {
     if(machineGroup.parent) machineGroup.visible=false;
+    setSimpleSceneVisible(true);
   }
 });
 
-// Machine selector
+// Machine selector — "none" option reverts to simple scene
 document.getElementById('machineSelect').addEventListener('change', function(){
-  if(!this.value) return;
+  if(!this.value){
+    // No machine selected — show simple bed/nozzle, hide machine
+    disposeMachine();
+    if(machineGroup.parent) machineGroup.visible=false;
+    document.getElementById('showMach').checked=false;
+    document.getElementById('chip-mach').classList.remove('on');
+    setSimpleSceneVisible(true);
+    return;
+  }
   document.getElementById('showMach').checked=true;
   document.getElementById('chip-mach').classList.add('on');
+  setSimpleSceneVisible(false);
   loadMachine(this.value);
 });
 document.getElementById('prog').addEventListener('input',e=>applyProgress(parseInt(e.target.value)));
