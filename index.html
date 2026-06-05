@@ -2261,17 +2261,28 @@ function checkCollisions(){
   scene.updateMatrixWorld(true);
 
   // Debug info shown in report panel
-  let debugLines = [`${collProxies.length} proxies loaded`];
-  for(let i=0;i<Math.min(2,collProxies.length);i++){
+  let debugLines = [`${collProxies.length} proxies`];
+  for(let i=0;i<Math.min(3,collProxies.length);i++){
     const wA=getProxyWorldPts(collProxies[i]);
-    const allZero = wA && wA.every(p=>Math.abs(p[0])<0.01&&Math.abs(p[1])<0.01&&Math.abs(p[2])<0.01);
-    debugLines.push(`[${i}] ${collProxies[i].part} G${partGroups[collProxies[i].part]??1}: ${wA?wA.length+' pts':'null'} ${allZero?'ALL ZERO!':wA?wA[0].map(v=>v.toFixed(1)).join(','):''}`);
+    const allZero = wA && wA.every(p=>Math.abs(p[0])<0.1&&Math.abs(p[1])<0.1&&Math.abs(p[2])<0.1);
+    const first = wA&&wA.length>0 ? wA[0].map(v=>v.toFixed(1)).join(',') : 'null';
+    debugLines.push(`[${i}]${collProxies[i].part} G${partGroups[collProxies[i].part]??1}: ${wA?wA.length+'pts':0} ${allZero?'ZERO!':first}`);
   }
-  if(collProxies.length>=2){
-    const [pA,pB]=[collProxies[0],collProxies[1]];
-    debugLines.push(`shouldCheck(${pA.part},${pB.part})=${shouldCheck(pA.part,pB.part)}`);
+  // Also test first cross-group pair directly
+  const parts=Object.keys(collProxies.reduce((a,p)=>{a[p.part]=1;return a},{}));
+  for(let i=0;i<parts.length;i++) for(let j=i+1;j<parts.length;j++){
+    if(shouldCheck(parts[i],parts[j])){
+      debugLines.push(`Testing: ${parts[i]}<->${parts[j]}`);
+      const pa=collProxies.find(p=>p.part===parts[i]);
+      const pb=collProxies.find(p=>p.part===parts[j]);
+      if(pa&&pb){
+        const wA=getProxyWorldPts(pa),wB=getProxyWorldPts(pb);
+        if(wA&&wB) debugLines.push(`overlap=${pointCloudsOverlap(wA,wB)} ptsA=${wA.length} ptsB=${wB.length}`);
+      }
+      break;
+    }
   }
-  if(report) report.innerHTML=debugLines.map(l=>`<div>${l}</div>`).join('');
+  if(report) report.innerHTML=debugLines.map(l=>`<div style="font-size:9px">${l}</div>`).join('');
   const violations=[];
   for(const proxy of collProxies) setProxyColliding(proxy.id,false);
   const proxiesByPart={};
