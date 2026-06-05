@@ -313,7 +313,12 @@
       <label class="chip on" id="chip-s5"><input type="checkbox" id="s5" checked><span class="dot" style="background:#ef4444"></span>5-axis</label>
       <label class="chip" id="chip-st"><input type="checkbox" id="st"><span class="dot" style="background:#f59e0b"></span>Travel</label>
       <label class="chip" id="chip-sc"><input type="checkbox" id="sc"><span class="dot" style="background:#a855f7"></span>By layer</label>
+      <label class="chip" id="chip-mach"><input type="checkbox" id="showMach"><span class="dot" style="background:#64748b"></span>Machine</label>
     </div>
+    <div class="h-sep"></div>
+    <select id="machineSelect" class="h-select">
+      <option value="">Select machine…</option>
+    </select>
     <div class="h-sep"></div>
     <span style="font-size:11px;color:var(--text2);font-family:var(--mono);">nozzle</span>
     <input type="number" class="h-num" id="nozzle" value="0.4" step="0.05" min="0.1" max="2.0">
@@ -451,6 +456,20 @@
       <div class="s-section">
         <button class="s-apply" id="s-apply-btn">Apply changes</button>
       </div>
+
+      <!-- Machine -->
+      <div class="s-section">
+        <div class="s-section-title">Machine Geometry</div>
+        <div class="s-row">
+          <span class="s-label">Opacity</span>
+          <div style="display:flex;align-items:center;gap:6px;flex:1;margin-left:12px;">
+            <input type="range" id="s-mach-opacity" min="0.05" max="1" step="0.05" value="0.5"
+              style="-webkit-appearance:none;appearance:none;flex:1;height:3px;background:var(--bg4);border-radius:2px;outline:none;cursor:pointer;">
+            <span id="s-mach-opacity-val" style="font-family:var(--mono);font-size:11px;color:var(--text1);min-width:28px;">50%</span>
+          </div>
+        </div>
+        <div class="s-hint">Push STL files to Machine/ folder in your repo.<br>Expected: frame.stl, z.stl, b.stl, c.stl, bed.stl, x.stl, y.stl, toolhead.stl</div>
+      </div>
     </div>
   </div>
 
@@ -552,6 +571,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 <script>
 // ── Three.js ──────────────────────────────────────────────────────
 const cv = document.getElementById('cv');
@@ -809,6 +829,130 @@ function initStaticScene(){
   buildNozzle();
 }
 
+// ── Machine STL loader ────────────────────────────────────────────
+const MACHINES_API = 'https://api.github.com/repos/Koaladeen/5-axis-3D-print-G-code-simulator/contents/Machines';
+const MACHINES_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-print-G-code-simulator/main/Machines';
+const MACHINE_PARTS = ['frame','z','b','c','y','x'];
+
+const machineGroup = new THREE.Group();
+const mGrp = {};
+let machineLoaded = false;
+let currentMachineName = '';
+
+const machMat = (opacity=0.55) => new THREE.MeshLambertMaterial({
+  color:0x8899aa, transparent:true, opacity, side:THREE.DoubleSide
+});
+const opacities = {frame:0.2, z:0.5, b:0.6, c:0.55, y:0.5, x:0.7};
+
+// Fetch machine folder list from GitHub API
+async function fetchMachineList(){
+  try{
+    const res = await fetch(MACHINES_API);
+    if(!res.ok) throw new Error('API '+res.status);
+    const items = await res.json();
+    const sel = document.getElementById('machineSelect');
+    items
+      .filter(i=>i.type==='dir')
+      .forEach(i=>{
+        const opt=document.createElement('option');
+        opt.value=i.name;
+        opt.textContent=i.name;
+        sel.appendChild(opt);
+      });
+  } catch(e){
+    console.info('Machine list unavailable (works on GitHub Pages):', e.message);
+  }
+}
+
+function disposeMachine(){
+  Object.values(mGrp).forEach(g=>{
+    g.traverse(c=>{if(c.isMesh){c.geometry.dispose();c.material.dispose();}});
+    if(g.parent) g.parent.remove(g);
+  });
+  Object.keys(mGrp).forEach(k=>delete mGrp[k]);
+  if(machineGroup.parent) machineGroup.clear();
+  machineLoaded=false;
+  currentMachineName='';
+}
+
+async function loadMachine(machineName){
+  if(!machineName) return;
+  if(machineName===currentMachineName && machineLoaded) {
+    machineGroup.visible=true; return;
+  }
+  disposeMachine();
+  document.getElementById('status').textContent='loading machine…';
+
+  // Bed side: frame > z > b > c (c IS the bed)
+  mGrp.frame    = new THREE.Group(); machineGroup.add(mGrp.frame);
+  mGrp.z        = new THREE.Group(); machineGroup.add(mGrp.z);
+  mGrp.b        = new THREE.Group(); mGrp.z.add(mGrp.b);
+  mGrp.c        = new THREE.Group(); mGrp.b.add(mGrp.c);
+  // Toolhead side: X is part of toolhead, Y moves under machine root
+  mGrp.y = new THREE.Group(); machineGroup.add(mGrp.y);
+  mGrp.x = new THREE.Group(); mGrp.y.add(mGrp.x);
+
+  if(!machineGroup.parent) rootGroup.add(machineGroup);
+  machineGroup.visible=true;
+
+  const loader = new THREE.STLLoader();
+  const base = `${MACHINES_RAW}/${encodeURIComponent(machineName)}`;
+  let loaded=0;
+
+  const promises = MACHINE_PARTS.map(name=>new Promise(resolve=>{
+    loader.load(
+      `${base}/${name}.stl`,
+      geo=>{
+        const mesh=new THREE.Mesh(geo, machMat(opacities[name]||0.5));
+        mesh.rotation.x=-Math.PI/2; // machine coords → Three.js Y-up
+        mGrp[name].add(mesh);
+        loaded++;
+        document.getElementById('status').textContent=`loading machine… ${loaded}/${MACHINE_PARTS.length}`;
+        resolve();
+      },
+      null,
+      ()=>resolve() // missing file — skip silently
+    );
+  }));
+
+  await Promise.all(promises);
+  machineLoaded=true;
+  currentMachineName=machineName;
+  document.getElementById('status').textContent='';
+
+  // Apply current opacity from slider
+  const op=parseFloat(document.getElementById('s-mach-opacity').value)||0.5;
+  setMachineOpacity(op);
+  updateMachine(0);
+}
+
+function updateMachine(moveIdx){
+  if(!machineLoaded||!machineGroup.parent) return;
+  machineGroup.visible=document.getElementById('showMach').checked;
+  if(!machineGroup.visible) return;
+
+  let mx=0,my=0,mz=0,mb=0,mc=0;
+  if(allMoves.length && moveIdx>0){
+    const m=allMoves[Math.min(moveIdx-1,allMoves.length-1)];
+    mx=m.mx;my=m.my;mz=m.mz;mb=m.mb;mc=m.mc;
+  }
+
+  // Bed side: Z↑, B rotates Y, C IS the bed (rotates on B-local Y)
+  if(mGrp.z) mGrp.z.position.set(0, mz, 0);
+  if(mGrp.b){ mGrp.b.rotation.set(0,0,0); mGrp.b.rotateY(-mb*Math.PI/180); }
+  if(mGrp.c){ mGrp.c.rotation.set(0,0,0); mGrp.c.rotateY(mc*Math.PI/180); }
+
+  // Toolhead side: Y translates in -Z, toolhead carries X
+  if(mGrp.y) mGrp.y.position.set(0, 0, -my);
+  if(mGrp.x) mGrp.x.position.set(mx, 0, 0);
+}
+
+function setMachineOpacity(val){
+  Object.values(mGrp).forEach(g=>{
+    g.traverse(c=>{if(c.isMesh) c.material.opacity=val;});
+  });
+}
+
 // ── Settings modal wiring ─────────────────────────────────────────
 document.getElementById('settingsBtn').addEventListener('click',()=>document.getElementById('settings-overlay').classList.add('open'));
 document.getElementById('settingsClose').addEventListener('click',()=>document.getElementById('settings-overlay').classList.remove('open'));
@@ -825,6 +969,12 @@ document.getElementById('s-apply-btn').addEventListener('click',()=>{
   if(!chip) return;
   const cb=chip.querySelector('input');
   chip.addEventListener('click',()=>{ cb.checked=!cb.checked; chip.classList.toggle('on',cb.checked); });
+});
+
+document.getElementById('s-mach-opacity').addEventListener('input', function(){
+  const val=parseFloat(this.value);
+  document.getElementById('s-mach-opacity-val').textContent=Math.round(val*100)+'%';
+  setMachineOpacity(val);
 });
 
 // ── Data ──────────────────────────────────────────────────────────
@@ -1003,6 +1153,7 @@ function applyProgress(pct){
   updateReadout(moveIdx);
   updateNozzlePosition(moveIdx);
   updateBedRotation(moveIdx);
+  updateMachine(moveIdx);
 }
 
 const TYPE_LABELS={e3:'3-axis extrude',e5:'5-axis extrude',travel:'Travel'};
@@ -1157,6 +1308,25 @@ document.getElementById('viewMode').addEventListener('change',()=>rebuildAll(fal
 document.getElementById('nozzle').addEventListener('change',()=>rebuildAll(false));
 document.getElementById('sc').addEventListener('change',()=>rebuildAll(false));
 ['se','s5','st'].forEach(id=>document.getElementById(id).addEventListener('change',()=>rebuildAll(false)));
+
+// Machine toggle
+document.getElementById('showMach').addEventListener('change', function(){
+  document.getElementById('chip-mach').classList.toggle('on', this.checked);
+  if(this.checked){
+    const name=document.getElementById('machineSelect').value;
+    if(name) loadMachine(name);
+  } else {
+    if(machineGroup.parent) machineGroup.visible=false;
+  }
+});
+
+// Machine selector
+document.getElementById('machineSelect').addEventListener('change', function(){
+  if(!this.value) return;
+  document.getElementById('showMach').checked=true;
+  document.getElementById('chip-mach').classList.add('on');
+  loadMachine(this.value);
+});
 document.getElementById('prog').addEventListener('input',e=>applyProgress(parseInt(e.target.value)));
 
 // ── Playback ──────────────────────────────────────────────────────
@@ -1215,6 +1385,7 @@ document.getElementById('pb-speed').addEventListener('input',function(){
 
 initThree();
 initStaticSceneLate();
+fetchMachineList();
 
 // ── Example files from GitHub ─────────────────────────────────────
 const REPO_API = 'https://api.github.com/repos/Koaladeen/5-axis-3D-print-G-code-simulator/contents/Example%20G-Codes';
