@@ -449,6 +449,19 @@
           <div id="prog-fill" style="width:100%"></div>
           <input type="range" id="prog" min="0" max="10000" value="10000">
         </div>
+        <!-- Playback controls -->
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+          <button id="pb-start" class="h-btn" title="Go to start" style="padding:3px 8px;font-size:14px;">⏮</button>
+          <button id="pb-play"  class="h-btn" title="Play/Pause"  style="padding:3px 8px;font-size:14px;">▶</button>
+          <button id="pb-stop"  class="h-btn" title="Stop"        style="padding:3px 8px;font-size:14px;">⏹</button>
+          <button id="pb-end"   class="h-btn" title="Go to end"   style="padding:3px 8px;font-size:14px;">⏭</button>
+          <div style="flex:1;display:flex;align-items:center;gap:6px;margin-left:4px;">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text2);white-space:nowrap;">SPEED</span>
+            <input type="range" id="pb-speed" min="1" max="200" value="20"
+              style="-webkit-appearance:none;appearance:none;flex:1;height:3px;background:var(--bg4);border-radius:2px;outline:none;cursor:pointer;">
+            <span id="pb-speed-val" style="font-family:var(--mono);font-size:10px;color:var(--text1);min-width:36px;text-align:right;">20×</span>
+          </div>
+        </div>
       </div>
       <!-- Violations banner -->
       <div id="violations-bar" style="display:none; background:#1a0a0a; border-top:1px solid #7f1d1d; padding:8px 16px; max-height:120px; overflow-y:auto;">
@@ -486,6 +499,17 @@
         <div class="stat-row"><span class="k"><span class="dot" style="background:#ef4444"></span>5-axis beads</span><span class="v" id="c5ax">—</span></div>
         <div class="stat-row"><span class="k"><span class="dot" style="background:#f59e0b"></span>Travel moves</span><span class="v" id="ctrav">—</span></div>
         <div class="stat-row"><span class="k">Total moves</span><span class="v" id="ctot">—</span></div>
+      </div>
+
+      <!-- Print state -->
+      <div class="panel-section">
+        <div class="section-label">Print State</div>
+        <div class="stat-row"><span class="k">Positioning</span><span class="v" id="ps-pos" style="color:var(--cyan);">—</span></div>
+        <div class="stat-row"><span class="k">Extruder</span><span class="v" id="ps-emode" style="color:var(--cyan);">—</span></div>
+        <div class="stat-row"><span class="k">Fan</span><span class="v" id="ps-fan">—</span></div>
+        <div class="stat-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px;">
+          <span class="k">🌡 Hotend</span><span class="v" id="ps-hotend">—</span></div>
+        <div class="stat-row"><span class="k">🌡 Bed</span><span class="v" id="ps-bed">—</span></div>
       </div>
 
       <!-- G-code -->
@@ -734,6 +758,7 @@ function parseGcode(text){
   let x=0,y=0,z=0,b=0,c=0,e=0;
   let absXYZ=true, absE=false;
   let layerZ=-Infinity, layerIdx=0;
+  let hotend=null, bed=null, fan=0;
   const result=[];
   for(let li=0;li<lines.length;li++){
     const raw=lines[li].trim();
@@ -743,6 +768,11 @@ function parseGcode(text){
     if(lu.startsWith('M82')){absE=true;continue;}
     if(lu.startsWith('G90')){absXYZ=true;continue;}
     if(lu.startsWith('G91')){absXYZ=false;continue;}
+    // Temperatures
+    if(/^M104\b/.test(lu)||/^M109\b/.test(lu)){const sm=lu.match(/S([\d.]+)/);if(sm)hotend=parseFloat(sm[1]);continue;}
+    if(/^M140\b/.test(lu)||/^M190\b/.test(lu)){const sm=lu.match(/S([\d.]+)/);if(sm)bed=parseFloat(sm[1]);continue;}
+    if(/^M106\b/.test(lu)){const sm=lu.match(/S([\d.]+)/);fan=sm?Math.round(parseFloat(sm[1])/2.55):100;continue;}
+    if(/^M107\b/.test(lu)){fan=0;continue;}
     const isG0=/^G0\b/.test(lu), isG1=/^G1\b/.test(lu);
     if(!isG0&&!isG1) continue;
     const px=x,py=y,pz=z,pb=b,pc=c;
@@ -759,14 +789,12 @@ function parseGcode(text){
     if(z>layerZ+0.001){layerZ=z;layerIdx++;}
     const is5ax=Math.abs(b)>0.5||Math.abs(c)>0.5;
     const type=extruding?(is5ax?'e5':'e3'):'travel';
-    // Always use part-frame coords for segment geometry — in machine frame the bed
-    // group gets B/C rotation applied, so geometry should be in part/bed-local space.
-    // Raw machine XYZ for a pure B/C rotation move would be zero-length and get skipped.
     const s0=toPart(px,py,pz,pb,pc);
     const s1=toPart(x,y,z,b,c);
     const dx2=s1[0]-s0[0],dy2=s1[1]-s0[1],dz2=s1[2]-s0[2];
     if(dx2*dx2+dy2*dy2+dz2*dz2<1e-8) continue;
-    result.push({type,s0,s1,mx:x,my:y,mz:z,mb:b,mc:c,me:e,layer:layerIdx,lineNum:li+1,rawLine:raw});
+    result.push({type,s0,s1,mx:x,my:y,mz:z,mb:b,mc:c,me:e,layer:layerIdx,lineNum:li+1,rawLine:raw,
+      absXYZ,absE,hotend,bedTemp:bed,fan});
   }
   return result;
 }
@@ -908,6 +936,7 @@ function updateReadout(moveIdx){
     document.getElementById('ax-e').textContent='0.000';
     document.getElementById('type-label').textContent='—';
     document.getElementById('type-dot').style.background='';
+    ['ps-pos','ps-emode','ps-fan','ps-hotend','ps-bed'].forEach(id=>document.getElementById(id).textContent='—');
     document.getElementById('gcode-ctx').innerHTML='';
     return;
   }
@@ -920,6 +949,12 @@ function updateReadout(moveIdx){
   document.getElementById('ax-e').textContent=m.me.toFixed(3);
   document.getElementById('type-label').textContent=TYPE_LABELS[m.type]||m.type;
   document.getElementById('type-dot').style.background=TYPE_COLORS[m.type]||'';
+  // Print state
+  document.getElementById('ps-pos').textContent=m.absXYZ?'G90 Absolute':'G91 Relative';
+  document.getElementById('ps-emode').textContent=m.absE?'M82 Absolute':'M83 Relative';
+  document.getElementById('ps-fan').textContent=m.fan!=null?m.fan+'%':'—';
+  document.getElementById('ps-hotend').textContent=m.hotend!=null?m.hotend+'°C':'—';
+  document.getElementById('ps-bed').textContent=m.bedTemp!=null?m.bedTemp+'°C':'—';
   buildContext(m.lineNum);
 }
 
@@ -1045,6 +1080,60 @@ document.getElementById('sc').addEventListener('change',()=>rebuildAll(false));
 ['se','s5','st'].forEach(id=>document.getElementById(id).addEventListener('change',()=>rebuildAll(false)));
 document.getElementById('prog').addEventListener('input',e=>applyProgress(parseInt(e.target.value)));
 
+// ── Playback ──────────────────────────────────────────────────────
+let playInterval=null;
+let isPlaying=false;
+
+function setPlaying(val){
+  isPlaying=val;
+  document.getElementById('pb-play').textContent=val?'⏸':'▶';
+}
+
+function stepForward(){
+  const prog=document.getElementById('prog');
+  const cur=parseInt(prog.value);
+  if(cur>=10000){ stopPlayback(); return; }
+  const speed=parseInt(document.getElementById('pb-speed').value);
+  // speed slider 1-200 maps to 1-200 steps per tick
+  const next=Math.min(10000, cur+speed);
+  prog.value=next;
+  applyProgress(next);
+}
+
+function stopPlayback(){
+  clearInterval(playInterval);
+  playInterval=null;
+  setPlaying(false);
+}
+
+function startPlayback(){
+  if(playInterval) clearInterval(playInterval);
+  setPlaying(true);
+  playInterval=setInterval(stepForward, 16); // ~60fps
+}
+
+document.getElementById('pb-play').addEventListener('click',()=>{
+  if(isPlaying){ stopPlayback(); }
+  else {
+    // If at end, restart from beginning
+    if(parseInt(document.getElementById('prog').value)>=10000){
+      document.getElementById('prog').value=0;
+      applyProgress(0);
+    }
+    startPlayback();
+  }
+});
+document.getElementById('pb-stop').addEventListener('click',()=>{
+  stopPlayback();
+  document.getElementById('prog').value=0;
+  applyProgress(0);
+});
+document.getElementById('pb-start').addEventListener('click',()=>{ stopPlayback(); document.getElementById('prog').value=0; applyProgress(0); });
+document.getElementById('pb-end').addEventListener('click',()=>{ stopPlayback(); document.getElementById('prog').value=10000; applyProgress(10000); });
+document.getElementById('pb-speed').addEventListener('input',function(){
+  document.getElementById('pb-speed-val').textContent=this.value+'×';
+});
+
 initThree();
 initStaticSceneLate();
 
@@ -1067,10 +1156,10 @@ const REPO_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-print-G-
         sel.appendChild(opt);
       });
   }catch(e){
-    const opt=document.createElement('option');
-    opt.value=''; opt.textContent='Failed to load list';
-    document.getElementById('exampleSelect').appendChild(opt);
-    console.warn('Example fetch error:',e);
+    // CORS only works when hosted — silently hide dropdown when running locally
+    const sel=document.getElementById('exampleSelect');
+    sel.style.display='none';
+    console.info('Example files unavailable (open via GitHub Pages to use):', e.message);
   }
 })();
 
@@ -1081,14 +1170,13 @@ document.getElementById('exampleSelect').addEventListener('change', async functi
   try{
     const res = await fetch(`${REPO_RAW}/${encodeURIComponent(name)}`);
     if(!res.ok) throw new Error('HTTP '+res.status);
-    const text = await res.text();
-    cachedText=text;
+    cachedText=await res.text();
     rebuildAll(true);
   }catch(e){
     document.getElementById('status').textContent='fetch failed';
     console.error(e);
   }
-  this.value=''; // reset dropdown
+  this.value='';
 });
 </script>
 </body>
