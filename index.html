@@ -216,6 +216,35 @@
   .gc-axis { color: var(--cyan); }
   .gc-comment { color: var(--text2); }
 
+  /* ── Mobile ── */
+  @media (max-width: 640px) {
+    html, body { overflow: auto; }
+    #app { grid-template-rows: auto 1fr; overflow: auto; height: auto; min-height: 100vh; }
+    #header { flex-wrap: wrap; height: auto; padding: 8px 10px; gap: 6px; }
+    #header .spacer { display: none; }
+    .h-sep { display: none; }
+    #fname { display: none; }
+    .chip-row { flex-wrap: wrap; }
+    #body { grid-template-columns: 1fr; grid-template-rows: 60vw auto; overflow: visible; }
+    #canvas-col { height: 60vw; min-height: 260px; flex-shrink: 0; }
+    #cv-wrap { height: 100%; }
+    #corner-tl { display: none; }
+    #right-panel {
+      border-left: none; border-top: 1px solid var(--border);
+      display: grid; grid-template-columns: 1fr 1fr;
+      overflow: visible; max-height: none; height: auto;
+    }
+    .panel-section { border-right: 1px solid var(--border); }
+    .panel-section:last-child { grid-column: 1 / -1; max-height: 180px; }
+    #gcode-ctx { max-height: 140px; }
+    .axis-grid { grid-template-columns: repeat(3, 1fr); }
+    #progress-area { padding: 8px 10px; }
+    #prog::-webkit-slider-thumb { width: 20px; height: 20px; }
+    #pb-speed::-webkit-slider-thumb { width: 20px; height: 20px; }
+    #settings-modal { width: calc(100vw - 24px); max-height: 90vh; }
+    .s-input { width: 72px; }
+  }
+
   /* ── Settings modal ── */
   #settings-overlay {
     display: none; position: fixed; inset: 0;
@@ -578,6 +607,56 @@ window.addEventListener('mousemove',e=>{
 cvWrap.addEventListener('wheel',e=>{
   zoom*=e.deltaY>0?1.1:0.91; zoom=Math.max(0.02,Math.min(100,zoom));
   camera.position.z=baseZ*zoom; e.preventDefault();
+},{passive:false});
+
+// ── Touch events ──────────────────────────────────────────────────
+let lastTouchDist=0, lastTouchMidX=0, lastTouchMidY=0, touchMode='';
+
+cvWrap.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  if(e.touches.length===1){
+    touchMode='orbit';
+    lastMX=e.touches[0].clientX; lastMY=e.touches[0].clientY;
+  } else if(e.touches.length===2){
+    touchMode='pinch';
+    const dx=e.touches[0].clientX-e.touches[1].clientX;
+    const dy=e.touches[0].clientY-e.touches[1].clientY;
+    lastTouchDist=Math.sqrt(dx*dx+dy*dy);
+    lastTouchMidX=(e.touches[0].clientX+e.touches[1].clientX)/2;
+    lastTouchMidY=(e.touches[0].clientY+e.touches[1].clientY)/2;
+  }
+},{passive:false});
+
+cvWrap.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if(touchMode==='orbit'&&e.touches.length===1){
+    const dx=e.touches[0].clientX-lastMX, dy=e.touches[0].clientY-lastMY;
+    lastMX=e.touches[0].clientX; lastMY=e.touches[0].clientY;
+    rotY+=dx*0.007; rotX+=dy*0.007;
+  } else if(touchMode==='pinch'&&e.touches.length===2){
+    const dx=e.touches[0].clientX-e.touches[1].clientX;
+    const dy=e.touches[0].clientY-e.touches[1].clientY;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    // Pinch zoom
+    zoom*=lastTouchDist/dist;
+    zoom=Math.max(0.02,Math.min(100,zoom));
+    camera.position.z=baseZ*zoom;
+    lastTouchDist=dist;
+    // Two-finger pan
+    const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;
+    const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;
+    panX+=(midX-lastTouchMidX)*0.15*(baseZ*zoom/200);
+    panY-=(midY-lastTouchMidY)*0.15*(baseZ*zoom/200);
+    lastTouchMidX=midX; lastTouchMidY=midY;
+  }
+},{passive:false});
+
+cvWrap.addEventListener('touchend',e=>{
+  if(e.touches.length===0) touchMode='';
+  else if(e.touches.length===1){
+    touchMode='orbit';
+    lastMX=e.touches[0].clientX; lastMY=e.touches[0].clientY;
+  }
 },{passive:false});
 
 // ── Chip toggles ──────────────────────────────────────────────────
