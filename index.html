@@ -216,6 +216,59 @@
   .gc-axis { color: var(--cyan); }
   .gc-comment { color: var(--text2); }
 
+  /* ── Collision configurator modal ── */
+  #coll-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    z-index: 110; align-items: center; justify-content: center;
+  }
+  #coll-overlay.open { display: flex; }
+  #coll-modal {
+    background: var(--bg1); border: 1px solid var(--border-hi);
+    border-radius: var(--r); width: 520px; max-height: 85vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  #coll-modal header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    flex-shrink: 0;
+  }
+  #coll-modal header button { background:none;border:none;color:var(--text1);cursor:pointer;font-size:18px; }
+  #coll-list { flex:1; overflow-y:auto; padding: 8px 0; }
+  .coll-proxy {
+    display: grid; grid-template-columns: 70px 60px 1fr 1fr 1fr 1fr 28px;
+    gap: 4px; align-items: center; padding: 5px 12px;
+    border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  .coll-proxy:hover { background: var(--bg2); }
+  .coll-proxy input, .coll-proxy select {
+    background: var(--bg3); border: 1px solid var(--border-hi);
+    color: var(--text0); font-family: var(--mono); font-size: 10px;
+    padding: 3px 5px; border-radius: 3px; width: 100%;
+  }
+  .coll-proxy .del-btn {
+    background: none; border: none; color: var(--text2);
+    cursor: pointer; font-size: 14px; line-height: 1; padding: 0;
+  }
+  .coll-proxy .del-btn:hover { color: var(--red); }
+  #coll-footer {
+    padding: 10px 12px; border-top: 1px solid var(--border);
+    display: flex; gap: 8px; flex-shrink: 0;
+  }
+  .coll-header-row {
+    display: grid; grid-template-columns: 70px 60px 1fr 1fr 1fr 1fr 28px;
+    gap: 4px; padding: 4px 12px;
+    font-size: 9px; font-family: var(--mono); color: var(--text2);
+    letter-spacing: 0.08em; border-bottom: 1px solid var(--border);
+  }
+  #coll-status {
+    font-size: 10px; font-family: var(--mono); padding: 6px 12px;
+    border-top: 1px solid var(--border); flex-shrink: 0;
+    color: var(--text2); min-height: 24px;
+  }
+
   /* ── Mobile ── */
   @media (max-width: 640px) {
     html, body { overflow: auto; }
@@ -329,6 +382,41 @@
     </select>
     <div class="h-sep"></div>
     <button class="h-btn" id="settingsBtn" title="Scene settings">⚙ Settings</button>
+    <button class="h-btn" id="collBtn" title="Collision configurator" style="border-color:rgba(239,68,68,0.4);color:#ef4444;">⬡ Collision</button>
+  </div>
+
+  <!-- Collision configurator modal -->
+  <div id="coll-overlay">
+    <div id="coll-modal">
+      <header>
+        <span>COLLISION PROXIES</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;">
+            <input type="checkbox" id="coll-show-proxies" checked>
+            <span style="color:var(--text1);">Show proxies</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;">
+            <input type="checkbox" id="coll-enabled" checked>
+            <span style="color:var(--text1);">Check collisions</span>
+          </label>
+          <button id="collClose">×</button>
+        </div>
+      </header>
+      <div style="padding:6px 12px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--cyan);" id="coll-selected-part">Click a machine part in the 3D view to select it for proxy assignment</div>
+      <div class="coll-header-row">
+        <span>PART</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>SZ</span><span>OFFSET X,Y,Z</span><span></span>
+      </div>
+      <div id="coll-list"></div>
+      <div id="coll-footer">
+        <button class="h-btn" id="coll-add-btn">+ Add proxy</button>
+        <button class="h-btn" id="coll-export-btn">↓ Export JSON</button>
+        <button class="h-btn" id="coll-import-btn">↑ Import JSON</button>
+        <input type="file" id="coll-import-file" accept=".json" style="display:none">
+        <div style="flex:1"></div>
+        <button class="h-btn" id="coll-check-btn" style="border-color:rgba(239,68,68,0.4);color:#ef4444;">▶ Check now</button>
+      </div>
+      <div id="coll-status">No proxies defined. Add proxies for each machine part that could collide.</div>
+    </div>
   </div>
 
   <!-- Settings modal -->
@@ -960,6 +1048,16 @@ async function loadMachine(machineName){
   currentMachineName=machineName;
   document.getElementById('status').textContent='';
   setSimpleSceneVisible(false);
+  // Try to load collision.json for this machine
+  try{
+    const cr=await fetch(`${MACHINES_RAW}/${encodeURIComponent(machineName)}/collision.json`);
+    if(cr.ok){
+      const data=await cr.json();
+      collProxies=(data.proxies||[]).map(p=>({...p,id:nextProxyId++}));
+      rebuildProxyWireframes();
+      document.getElementById('coll-status').textContent=`Auto-loaded ${collProxies.length} proxies from collision.json`;
+    }
+  }catch(e){}
   updateMachine(0);
 }
 
@@ -1221,6 +1319,7 @@ function applyProgress(pct){
   updateNozzlePosition(moveIdx);
   updateBedRotation(moveIdx);
   updateMachine(moveIdx);
+  checkCollisions();
 }
 
 const TYPE_LABELS={e3:'3-axis extrude',e5:'5-axis extrude',travel:'Travel'};
@@ -1338,7 +1437,7 @@ function checkLimits(){
         if(!seen[k]){
           seen[k]=true;
           const unit=ax.key==='b'||ax.key==='c'?'°':'mm';
-          violations.push(`Line ${m.lineNum}: ${ax.label} = ${v.toFixed(2)}${unit} &lt; min (${ax.min}${unit})`);
+          violations.push(`<div class="axis-viol" style="color:#fca5a5;">Line ${m.lineNum}: ${ax.label} = ${v.toFixed(2)}${unit} &lt; min (${ax.min}${unit})</div>`);
         }
       }
       if(v>ax.max){
@@ -1346,7 +1445,7 @@ function checkLimits(){
         if(!seen[k]){
           seen[k]=true;
           const unit=ax.key==='b'||ax.key==='c'?'°':'mm';
-          violations.push(`Line ${m.lineNum}: ${ax.label} = ${v.toFixed(2)}${unit} &gt; max (${ax.max}${unit})`);
+          violations.push(`<div class="axis-viol" style="color:#fca5a5;">Line ${m.lineNum}: ${ax.label} = ${v.toFixed(2)}${unit} &gt; max (${ax.max}${unit})</div>`);
         }
       }
     }
@@ -1355,7 +1454,7 @@ function checkLimits(){
   const bar=document.getElementById('violations-bar');
   const list=document.getElementById('violations-list');
   if(violations.length){
-    list.innerHTML=violations.join('<br>');
+    list.innerHTML=violations.join('');
     bar.style.display='block';
   } else {
     bar.style.display='none';
@@ -1471,11 +1570,369 @@ document.getElementById('pb-speed').addEventListener('input',function(){
   document.getElementById('pb-speed-val').textContent=this.value+'×';
 });
 
+// ── Collision proxy system ────────────────────────────────────────
+let collProxies = [];
+let proxyMeshes = {}; // id → THREE.Mesh
+let collisionEnabled = true;
+let nextProxyId = 1;
+let selectedPart = null; // currently selected machine part for proxy assignment
+let partHighlights = {}; // part name → original materials
+
+const SKIP_PAIRS = new Set([
+  'Frame-Z','Frame-B','Frame-C','Frame-Y','Frame-X',
+  'Z-B','Z-C','B-C','Y-X'
+]);
+function shouldCheck(a,b){
+  const k1=a+'-'+b, k2=b+'-'+a;
+  return !SKIP_PAIRS.has(k1)&&!SKIP_PAIRS.has(k2);
+}
+
+// Solid transparent proxy mesh
+function makeProxyMesh(proxy, colliding=false){
+  let geo;
+  if(proxy.type==='sphere')      geo=new THREE.SphereGeometry(proxy.sx,16,10);
+  else if(proxy.type==='cylinder') geo=new THREE.CylinderGeometry(proxy.sx,proxy.sx,proxy.sy,16,1);
+  else                             geo=new THREE.BoxGeometry(proxy.sx,proxy.sy,proxy.sz);
+  const col = colliding ? 0xff2222 : 0xff4444;
+  const mat = new THREE.MeshLambertMaterial({color:col, transparent:true, opacity:0.28, side:THREE.DoubleSide, depthWrite:false});
+  // Wireframe overlay
+  const wireMat = new THREE.LineBasicMaterial({color:colliding?0xff0000:0xff6666, transparent:true, opacity:0.7});
+  const wireGeo = new THREE.WireframeGeometry(geo);
+  const grp = new THREE.Group();
+  grp.add(new THREE.Mesh(geo,mat));
+  grp.add(new THREE.LineSegments(wireGeo,wireMat));
+  grp.position.set(proxy.ox,proxy.oy,proxy.oz);
+  return grp;
+}
+
+function rebuildProxyWireframes(){
+  Object.values(proxyMeshes).forEach(m=>{if(m.parent)m.parent.remove(m);});
+  proxyMeshes={};
+  const show=document.getElementById('coll-show-proxies')?.checked;
+  for(const proxy of collProxies){
+    const grp=mGrp[proxy.part]; if(!grp) continue;
+    const mesh=makeProxyMesh(proxy);
+    mesh.visible=!!show;
+    grp.add(mesh);
+    proxyMeshes[proxy.id]=mesh;
+  }
+}
+
+function setProxyWireframesVisible(v){
+  Object.values(proxyMeshes).forEach(m=>m.visible=v);
+}
+
+function setProxyColliding(id, colliding){
+  const mesh=proxyMeshes[id]; if(!mesh) return;
+  mesh.traverse(c=>{
+    if(c.isMesh) c.material.color.set(colliding?0xff2222:0xff4444);
+    if(c.isLineSegments) c.material.color.set(colliding?0xff0000:0xff6666);
+  });
+}
+
+// ── Part selection via raycasting ─────────────────────────────────
+let collConfigOpen = false;
+const raycaster = new THREE.Raycaster();
+const mouse2D = new THREE.Vector2();
+
+// Build flat list of all meshes in machineGroup with their part name
+function getMachineRayTargets(){
+  const targets=[];
+  for(const [partName, grp] of Object.entries(mGrp)){
+    grp.traverse(c=>{
+      if(c.isMesh){ c.userData.partName=partName; targets.push(c); }
+    });
+  }
+  return targets;
+}
+
+function highlightPart(partName){
+  // Clear previous highlight
+  clearPartHighlight();
+  selectedPart=partName;
+  if(!mGrp[partName]) return;
+  mGrp[partName].traverse(c=>{
+    if(!c.isMesh||c.userData.isProxyMesh) return;
+    partHighlights[c.uuid]={mesh:c, origColor:c.material.color.clone(), origEmissive:c.material.emissive?.clone()};
+    c.material=c.material.clone();
+    c.material.emissive=new THREE.Color(0x224488);
+    c.material.emissiveIntensity=0.6;
+  });
+  document.getElementById('coll-selected-part').textContent='Selected: '+partName;
+}
+
+function clearPartHighlight(){
+  for(const {mesh,origColor,origEmissive} of Object.values(partHighlights)){
+    if(mesh.material){
+      mesh.material.color.copy(origColor);
+      if(origEmissive) mesh.material.emissive.copy(origEmissive);
+      else if(mesh.material.emissive) mesh.material.emissive.set(0x000000);
+      mesh.material.emissiveIntensity=0;
+    }
+  }
+  partHighlights={};
+  selectedPart=null;
+  document.getElementById('coll-selected-part').textContent='Click a machine part to select';
+}
+
+// Canvas click — only raycast when coll config is open AND not dragging
+let mouseDownPos={x:0,y:0};
+cvWrap.addEventListener('mousedown',e=>{mouseDownPos={x:e.clientX,y:e.clientY};});
+cvWrap.addEventListener('click',e=>{
+  if(!collConfigOpen||!machineLoaded) return;
+  const dx=Math.abs(e.clientX-mouseDownPos.x), dy=Math.abs(e.clientY-mouseDownPos.y);
+  if(dx>4||dy>4) return; // was a drag, not a click
+  const rect=cvWrap.getBoundingClientRect();
+  mouse2D.x=((e.clientX-rect.left)/rect.width)*2-1;
+  mouse2D.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouse2D,camera);
+  const targets=getMachineRayTargets();
+  const hits=raycaster.intersectObjects(targets,false);
+  if(hits.length>0){
+    const partName=hits[0].object.userData.partName;
+    if(partName) highlightPart(partName);
+  } else {
+    clearPartHighlight();
+  }
+});
+
+function rebuildProxyWireframes(){
+  // Remove old
+  Object.values(proxyMeshes).forEach(m=>{
+    if(m.parent) m.parent.remove(m);
+    m.traverse(c=>{ if(c.geometry) c.geometry.dispose(); });
+  });
+  proxyMeshes={};
+  const show = document.getElementById('coll-show-proxies')?.checked;
+  for(const proxy of collProxies){
+    const grp = mGrp[proxy.part];
+    if(!grp) continue;
+    const mesh = makeProxyMesh(proxy);
+    mesh.visible = !!show;
+    grp.add(mesh);
+    proxyMeshes[proxy.id] = mesh;
+  }
+}
+
+function setProxyWireframesVisible(v){
+  Object.values(proxyMeshes).forEach(m=>m.visible=v);
+}
+
+// Get world-space OBB for a proxy given its current transform
+function getProxyOBB(proxy){
+  const grp = mGrp[proxy.part];
+  if(!grp) return null;
+  // World position of proxy center
+  const local = new THREE.Vector3(proxy.ox, proxy.oy, proxy.oz);
+  const world = local.clone().applyMatrix4(grp.matrixWorld);
+  // World rotation
+  const quat = new THREE.Quaternion();
+  grp.getWorldQuaternion(quat);
+  // Half-extents in local space
+  let hx, hy, hz;
+  if(proxy.type==='sphere'){ hx=hy=hz=proxy.sx; }
+  else if(proxy.type==='cylinder'){ hx=hz=proxy.sx; hy=proxy.sy/2; }
+  else { hx=proxy.sx/2; hy=proxy.sy/2; hz=proxy.sz/2; }
+  return { center: world, quat, hx, hy, hz, type: proxy.type, r: proxy.sx };
+}
+
+// SAT overlap test for two OBBs (separating axis theorem, approximate)
+function obbsOverlap(a, b){
+  // Transform b center into a's local space
+  const invA = new THREE.Quaternion().copy(a.quat).conjugate();
+  const diff = new THREE.Vector3().subVectors(b.center, a.center).applyQuaternion(invA);
+  // Get b's axes in a's local space
+  const relQ = new THREE.Quaternion().copy(invA).multiply(b.quat);
+  const bx = new THREE.Vector3(1,0,0).applyQuaternion(relQ);
+  const by = new THREE.Vector3(0,1,0).applyQuaternion(relQ);
+  const bz = new THREE.Vector3(0,0,1).applyQuaternion(relQ);
+  // Test 15 axes (3 from A, 3 from B, 9 cross products)
+  const axes=[
+    new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1),
+    bx, by, bz,
+  ];
+  for(const axis of axes){
+    if(axis.lengthSq()<0.001) continue;
+    const pA = a.hx*Math.abs(axis.x)+a.hy*Math.abs(axis.y)+a.hz*Math.abs(axis.z);
+    // Project b extents onto axis (in a's local space)
+    const pB = b.hx*Math.abs(axis.dot(bx))+b.hy*Math.abs(axis.dot(by))+b.hz*Math.abs(axis.dot(bz));
+    const dist = Math.abs(diff.dot(axis));
+    if(dist > pA+pB) return false;
+  }
+  return true;
+}
+
+function spheresOverlap(a, b){
+  return a.center.distanceTo(b.center) < a.r + b.r;
+}
+
+function checkCollisions(){
+  if(!collisionEnabled || !collProxies.length || !machineLoaded) return;
+  rootGroup.updateMatrixWorld(true);
+
+  const violations = [];
+  for(const proxy of collProxies) setProxyColliding(proxy.id, false);
+
+  const proxiesByPart = {};
+  for(const p of collProxies){
+    if(!proxiesByPart[p.part]) proxiesByPart[p.part]=[];
+    proxiesByPart[p.part].push(p);
+  }
+  const parts = Object.keys(proxiesByPart);
+
+  for(let i=0;i<parts.length;i++){
+    for(let j=i+1;j<parts.length;j++){
+      const pA=parts[i], pB=parts[j];
+      if(!shouldCheck(pA,pB)) continue;
+      for(const pa of proxiesByPart[pA]){
+        for(const pb of proxiesByPart[pB]){
+          const obbA=getProxyOBB(pa), obbB=getProxyOBB(pb);
+          if(!obbA||!obbB) continue;
+          let hit=false;
+          if(pa.type==='sphere'&&pb.type==='sphere') hit=spheresOverlap(obbA,obbB);
+          else hit=obbsOverlap(obbA,obbB);
+          if(hit){
+            violations.push(`${pA} ↔ ${pB}`);
+            setProxyColliding(pa.id, true);
+            setProxyColliding(pb.id, true);
+          }
+        }
+      }
+    }
+  }
+
+  // Show in violations bar
+  const bar=document.getElementById('violations-bar');
+  const list=document.getElementById('violations-list');
+  const existing=list.innerHTML;
+  // Separate collision violations from axis limit violations
+  const axisLines=Array.from(list.querySelectorAll('.axis-viol')).map(e=>e.outerHTML).join('');
+  let collHtml = violations.length
+    ? violations.map(v=>`<div style="color:#fca5a5;">💥 Collision: ${v}</div>`).join('')
+    : '';
+  list.innerHTML = axisLines + collHtml;
+  if(violations.length || list.innerHTML) bar.style.display='block';
+
+  document.getElementById('coll-status').textContent =
+    violations.length ? `⚠ ${violations.length} collision(s) detected` : '✓ No collisions detected';
+}
+
+// ── Configurator UI ───────────────────────────────────────────────
+function renderProxyList(){
+  const container = document.getElementById('coll-list');
+  container.innerHTML = '';
+  for(const proxy of collProxies){
+    const row = document.createElement('div');
+    row.className = 'coll-proxy';
+    row.innerHTML = `
+      <select class="cp-part" data-id="${proxy.id}">
+        ${MACHINE_PARTS.map(p=>`<option value="${p}" ${p===proxy.part?'selected':''}>${p}</option>`).join('')}
+      </select>
+      <select class="cp-type" data-id="${proxy.id}">
+        <option value="box" ${proxy.type==='box'?'selected':''}>Box</option>
+        <option value="cylinder" ${proxy.type==='cylinder'?'selected':''}>Cyl</option>
+        <option value="sphere" ${proxy.type==='sphere'?'selected':''}>Sphere</option>
+      </select>
+      <input class="cp-sx" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="Width/Radius">
+      <input class="cp-sy" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="Height (box/cyl)">
+      <input class="cp-sz" type="number" data-id="${proxy.id}" value="${proxy.sz}" step="1" min="1" title="Depth (box)">
+      <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0">
+      <button class="del-btn" data-id="${proxy.id}">×</button>
+    `;
+    container.appendChild(row);
+  }
+  // Wire events
+  container.querySelectorAll('.cp-part,.cp-type,.cp-sx,.cp-sy,.cp-sz,.cp-off').forEach(el=>{
+    el.addEventListener('change', e=>updateProxy(e.target));
+    el.addEventListener('input', e=>updateProxy(e.target));
+  });
+  container.querySelectorAll('.del-btn').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const id=parseInt(e.target.dataset.id);
+      collProxies=collProxies.filter(p=>p.id!==id);
+      if(proxyMeshes[id]){proxyMeshes[id].parent?.remove(proxyMeshes[id]);proxyMeshes[id].geometry.dispose();delete proxyMeshes[id];}
+      renderProxyList();
+    });
+  });
+}
+
+function updateProxy(el){
+  const id=parseInt(el.dataset.id);
+  const proxy=collProxies.find(p=>p.id===id); if(!proxy) return;
+  if(el.classList.contains('cp-part')) proxy.part=el.value;
+  if(el.classList.contains('cp-type')) proxy.type=el.value;
+  if(el.classList.contains('cp-sx'))  proxy.sx=parseFloat(el.value)||10;
+  if(el.classList.contains('cp-sy'))  proxy.sy=parseFloat(el.value)||10;
+  if(el.classList.contains('cp-sz'))  proxy.sz=parseFloat(el.value)||10;
+  if(el.classList.contains('cp-off')){
+    const parts=el.value.split(',').map(v=>parseFloat(v.trim())||0);
+    proxy.ox=parts[0]||0; proxy.oy=parts[1]||0; proxy.oz=parts[2]||0;
+  }
+  rebuildProxyWireframes();
+}
+
+// ── Modal wiring ──────────────────────────────────────────────────
+document.getElementById('collBtn').addEventListener('click',()=>{
+  collConfigOpen=true;
+  renderProxyList();
+  document.getElementById('coll-overlay').classList.add('open');
+});
+document.getElementById('collClose').addEventListener('click',()=>{
+  collConfigOpen=false;
+  clearPartHighlight();
+  document.getElementById('coll-overlay').classList.remove('open');
+});
+document.getElementById('coll-overlay').addEventListener('click',e=>{
+  if(e.target===e.currentTarget){
+    collConfigOpen=false;
+    clearPartHighlight();
+    e.currentTarget.classList.remove('open');
+  }
+});
+
+document.getElementById('coll-show-proxies').addEventListener('change',function(){
+  setProxyWireframesVisible(this.checked);
+});
+document.getElementById('coll-enabled').addEventListener('change',function(){
+  collisionEnabled=this.checked;
+});
+
+document.getElementById('coll-add-btn').addEventListener('click',()=>{
+  const part = selectedPart || MACHINE_PARTS[0];
+  collProxies.push({id:nextProxyId++, part, type:'box', sx:30, sy:30, sz:30, ox:0, oy:0, oz:0});
+  renderProxyList();
+  rebuildProxyWireframes();
+});
+
+document.getElementById('coll-check-btn').addEventListener('click',()=>checkCollisions());
+
+document.getElementById('coll-export-btn').addEventListener('click',()=>{
+  const json=JSON.stringify({proxies:collProxies},null,2);
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(json);
+  a.download='collision.json'; a.click();
+});
+
+document.getElementById('coll-import-btn').addEventListener('click',()=>document.getElementById('coll-import-file').click());
+document.getElementById('coll-import-file').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      collProxies=(data.proxies||[]).map(p=>({...p,id:nextProxyId++}));
+      rebuildProxyWireframes();
+      renderProxyList();
+      document.getElementById('coll-status').textContent=`Loaded ${collProxies.length} proxies`;
+    }catch(err){document.getElementById('coll-status').textContent='Import failed: '+err.message;}
+  };
+  r.readAsText(f);
+  e.target.value='';
+});
+
 initThree();
 initStaticSceneLate();
 fetchMachineList();
-
-// ── Example files from GitHub ─────────────────────────────────────
 const REPO_API = 'https://api.github.com/repos/Koaladeen/5-axis-3D-print-G-code-simulator/contents/Example%20G-Codes';
 const REPO_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-print-G-code-simulator/main/Example%20G-Codes';
 
