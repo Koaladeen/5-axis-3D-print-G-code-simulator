@@ -10,148 +10,275 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg0: #080b0f;
-    --bg1: #0d1117;
-    --bg2: #131920;
-    --bg3: #1a2230;
-    --bg4: #202c3d;
-    --border: rgba(255,255,255,0.07);
-    --border-hi: rgba(255,255,255,0.13);
-    --text0: #e8edf5;
-    --text1: #8a96aa;
-    --text2: #4a5568;
-    --accent: #3b82f6;
-    --accent-dim: rgba(59,130,246,0.15);
-    --green: #22c55e;
-    --red: #ef4444;
-    --amber: #f59e0b;
-    --purple: #a855f7;
-    --cyan: #06b6d4;
+    /* CAM-style palette — steel, not web-app */
+    --bg0:   #0a0c0e;
+    --bg1:   #111416;
+    --bg2:   #181c1f;
+    --bg3:   #1e2428;
+    --bg4:   #252d33;
+    --bg5:   #2e3840;
+    --border:    #2a3038;
+    --border-hi: #3a4550;
+    --text0: #d4dce6;
+    --text1: #7a8d9e;
+    --text2: #3d4f5e;
+    --text3: #253040;
+
+    --ax-x:  #e05050;
+    --ax-y:  #50c878;
+    --ax-z:  #4a90d9;
+    --ax-b:  #e8a030;
+    --ax-c:  #9060d0;
+    --ax-e:  #60a0c0;
+
+    --accent:     #2878c8;
+    --accent-hi:  #3a92e8;
+    --accent-dim: rgba(40,120,200,0.12);
+    --green:  #3ab870;
+    --red:    #d04040;
+    --amber:  #d08020;
+    --teal:   #30a890;
+
     --mono: 'JetBrains Mono', monospace;
     --sans: 'Inter', sans-serif;
-    --r: 8px;
-    --r-sm: 5px;
   }
 
-  html, body { height: 100%; background: var(--bg0); color: var(--text0); font-family: var(--sans); font-size: 13px; overflow: hidden; }
+  html, body {
+    height: 100%; overflow: hidden;
+    background: var(--bg0); color: var(--text0);
+    font-family: var(--sans); font-size: 12px;
+    -webkit-font-smoothing: antialiased;
+  }
 
-  /* ── Layout ── */
-  #app { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
+  /* ── App shell ── */
+  #app { display: grid; grid-template-rows: 40px 1fr; height: 100vh; }
 
-  /* ── Header ── */
+  /* ── Titlebar ── */
   #header {
     background: var(--bg1);
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 12px;
-    padding: 0 16px;
+    border-bottom: 2px solid var(--accent);
+    display: flex; align-items: center; gap: 0;
+    padding: 0;
+    position: relative;
   }
-  #header .logo {
-    font-family: var(--mono); font-size: 12px; font-weight: 600;
-    color: var(--accent); letter-spacing: 0.12em;
+  /* Product name block */
+  .logo-block {
+    background: var(--accent);
+    height: 100%; padding: 0 16px;
     display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.18em; color: #fff;
+    flex-shrink: 0;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+    padding-right: 24px;
   }
-  #header .logo::before {
-    content: ''; display: block; width: 8px; height: 8px;
-    background: var(--accent); border-radius: 50%;
-    box-shadow: 0 0 8px var(--accent);
-  }
-  .h-sep { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
-  #fname { font-size: 12px; color: var(--text1); font-family: var(--mono); }
-  #status { font-size: 11px; color: var(--amber); font-family: var(--mono); }
-  #header .spacer { flex: 1; }
+  .logo-block span { opacity: 0.7; font-weight: 400; }
 
-  /* Header controls */
-  .h-btn {
-    background: var(--bg3); border: 1px solid var(--border-hi);
-    color: var(--text0); font-family: var(--sans); font-size: 12px;
-    padding: 5px 12px; border-radius: var(--r-sm); cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-    display: flex; align-items: center; gap: 6px;
+  /* Toolbar groups */
+  .tb-group {
+    display: flex; align-items: center; gap: 1px;
+    border-right: 1px solid var(--border);
+    padding: 0 8px; height: 100%;
   }
-  .h-btn:hover { background: var(--bg4); border-color: rgba(255,255,255,0.2); }
-  .h-btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-  .h-btn.primary:hover { background: rgba(59,130,246,0.25); }
-
-  .h-select {
-    background: var(--bg3); border: 1px solid var(--border-hi);
-    color: var(--text0); font-family: var(--sans); font-size: 12px;
-    padding: 5px 8px; border-radius: var(--r-sm); cursor: pointer;
-  }
-  .h-num {
-    background: var(--bg3); border: 1px solid var(--border-hi);
-    color: var(--text0); font-family: var(--mono); font-size: 12px;
-    padding: 4px 6px; border-radius: var(--r-sm); width: 56px; text-align: right;
-  }
-  .h-num:focus, .h-select:focus { outline: 1px solid var(--accent); }
-
-  /* Toggle chips */
-  .chip-row { display: flex; gap: 4px; }
-  .chip {
+  .tb-group:first-of-type { padding-left: 12px; }
+  .tb-btn {
+    background: transparent; border: none;
+    color: var(--text1); font-family: var(--mono); font-size: 10px;
+    padding: 0 8px; height: 28px; cursor: pointer;
     display: flex; align-items: center; gap: 5px;
+    border-radius: 2px; letter-spacing: 0.04em;
+    transition: background 0.1s, color 0.1s; white-space: nowrap;
+  }
+  .tb-btn:hover { background: var(--bg4); color: var(--text0); }
+  .tb-btn.active { background: var(--accent-dim); color: var(--accent-hi); border: 1px solid var(--accent); }
+  .tb-btn.danger { color: var(--red); }
+  .tb-btn.danger:hover { background: rgba(208,64,64,0.1); }
+  .tb-btn.success { color: var(--green); }
+  .tb-btn.primary { background: var(--accent); color: #fff; border-radius: 2px; }
+  .tb-btn.primary:hover { background: var(--accent-hi); }
+  .tb-icon { font-size: 13px; line-height: 1; }
+
+  /* Selects in toolbar */
+  .tb-select {
     background: var(--bg3); border: 1px solid var(--border);
-    border-radius: 20px; padding: 3px 10px; cursor: pointer;
-    font-size: 11px; color: var(--text1); transition: all 0.15s;
+    color: var(--text0); font-family: var(--mono); font-size: 10px;
+    padding: 3px 6px; border-radius: 2px; cursor: pointer;
+    height: 24px;
+  }
+  .tb-select:focus { outline: 1px solid var(--accent); }
+  .tb-num {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text0); font-family: var(--mono); font-size: 10px;
+    padding: 3px 5px; border-radius: 2px; width: 48px; text-align: right; height: 24px;
+  }
+  .tb-label { font-family: var(--mono); font-size: 9px; color: var(--text2); letter-spacing: 0.08em; }
+  .tb-spacer { flex: 1; }
+
+  /* Status bar right side */
+  #tb-status { font-family: var(--mono); font-size: 10px; color: var(--amber); padding: 0 10px; }
+  #tb-fname  { font-family: var(--mono); font-size: 10px; color: var(--text1); padding: 0 8px; }
+
+  /* Chip toggles */
+  .chip-group { display: flex; gap: 2px; align-items: center; }
+  .chip {
+    display: flex; align-items: center; gap: 4px;
+    background: var(--bg3); border: 1px solid var(--border);
+    padding: 2px 7px; cursor: pointer;
+    font-family: var(--mono); font-size: 9px; color: var(--text2);
+    letter-spacing: 0.06em; transition: all 0.1s; border-radius: 1px;
     user-select: none;
   }
   .chip input { display: none; }
-  .chip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-  .chip.on { border-color: var(--border-hi); color: var(--text0); background: var(--bg4); }
+  .chip .dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .chip.on { background: var(--bg5); border-color: var(--border-hi); color: var(--text0); }
 
-  /* ── Body ── */
-  #body { display: grid; grid-template-columns: 1fr 220px; overflow: hidden; }
+  /* ── Main body: left jog | canvas | right panel ── */
+  #body { display: grid; grid-template-columns: 180px 1fr 210px; overflow: hidden; }
+
+  /* ── Left jog panel ── */
+  #jog-panel {
+    background: var(--bg1);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .jp-header {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 5px 10px; font-family: var(--mono); font-size: 9px;
+    color: var(--text2); letter-spacing: 0.12em; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .jp-header .jp-status { color: var(--amber); font-size: 9px; }
+  .jog-axis {
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+  }
+  .jog-axis-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;
+  }
+  .jog-axis-name {
+    font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+  }
+  .jog-axis-val {
+    font-family: var(--mono); font-size: 11px; color: var(--text0);
+    background: var(--bg3); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 1px; min-width: 52px; text-align: right;
+  }
+  .jog-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; border-radius: 0;
+    outline: none; cursor: pointer; margin-bottom: 3px;
+  }
+  .jog-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 10px; height: 18px;
+    border-radius: 1px; cursor: pointer;
+  }
+  .jog-range-labels {
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 8px; color: var(--text2);
+  }
+  #jog-home-btn {
+    margin: 8px 10px;
+    width: calc(100% - 20px);
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text1); font-family: var(--mono); font-size: 9px;
+    padding: 5px; cursor: pointer; letter-spacing: 0.08em; border-radius: 1px;
+  }
+  #jog-home-btn:hover { background: var(--bg4); color: var(--text0); }
+  .jp-disabled { opacity: 0.35; pointer-events: none; }
 
   /* ── Canvas area ── */
   #canvas-col {
     display: flex; flex-direction: column;
     background: var(--bg0); overflow: hidden;
+    position: relative;
   }
 
   #cv-wrap { flex: 1; position: relative; overflow: hidden; }
   #cv { display: block; width: 100%; height: 100%; }
 
-  /* Corner overlays on canvas */
-  #corner-tl, #corner-br {
-    position: absolute; font-family: var(--mono); font-size: 10px;
-    color: var(--text2); pointer-events: none; line-height: 1.6;
+  /* Canvas overlays */
+  #corner-tl {
+    position: absolute; top: 10px; left: 10px;
+    font-family: var(--mono); font-size: 9px; color: var(--text3);
+    pointer-events: none; line-height: 1.8; letter-spacing: 0.04em;
   }
-  #corner-tl { top: 12px; left: 14px; }
-  #corner-br { bottom: 12px; right: 14px; text-align: right; }
+  #corner-br {
+    position: absolute; bottom: 10px; right: 10px;
+    font-family: var(--mono); font-size: 9px; color: var(--text2);
+    pointer-events: none; text-align: right;
+  }
+  /* View cube hint */
+  #view-hint {
+    position: absolute; bottom: 10px; left: 10px;
+    font-family: var(--mono); font-size: 9px; color: var(--text3);
+    pointer-events: none; line-height: 1.8;
+  }
 
-  /* Progress bar area */
+  /* ── Progress / timeline bar ── */
   #progress-area {
-    background: var(--bg1); border-top: 1px solid var(--border);
-    padding: 10px 16px; display: flex; flex-direction: column; gap: 6px;
+    background: var(--bg2); border-top: 1px solid var(--border);
+    padding: 6px 12px 8px; display: flex; flex-direction: column; gap: 5px;
   }
-  .prog-meta { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
-  .prog-meta .label { color: var(--text2); font-family: var(--mono); }
-  .prog-meta .val { color: var(--text1); font-family: var(--mono); }
-  .prog-meta .move-info { color: var(--text2); font-size: 10px; font-family: var(--mono); }
+  .prog-meta {
+    display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 9px;
+  }
+  .prog-meta .label { color: var(--text2); letter-spacing: 0.1em; }
+  .prog-meta .val   { color: var(--accent-hi); font-weight: 600; }
+  .prog-meta .move-info { color: var(--text2); margin-left: auto; }
 
-  /* Custom range slider */
   #prog {
     -webkit-appearance: none; appearance: none;
-    width: 100%; height: 3px; background: var(--bg4);
-    border-radius: 2px; outline: none; cursor: pointer;
+    width: 100%; height: 4px; background: var(--bg4); border-radius: 0; outline: none; cursor: pointer;
   }
   #prog::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 14px; height: 14px; border-radius: 50%;
-    background: var(--accent); cursor: pointer;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
-    transition: box-shadow 0.15s;
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 1px;
+    background: var(--accent-hi); cursor: pointer;
+    box-shadow: 0 0 0 2px rgba(58,146,232,0.3);
   }
-  #prog::-webkit-slider-thumb:hover { box-shadow: 0 0 0 5px rgba(59,130,246,0.3); }
   #prog::-moz-range-thumb {
-    width: 14px; height: 14px; border-radius: 50%;
-    background: var(--accent); cursor: pointer; border: none;
+    width: 12px; height: 12px; border-radius: 1px;
+    background: var(--accent-hi); border: none; cursor: pointer;
   }
-
   .prog-track { position: relative; }
   #prog-fill {
     position: absolute; top: 50%; transform: translateY(-50%);
-    left: 0; height: 3px; background: var(--accent);
-    border-radius: 2px; pointer-events: none;
+    left: 0; height: 4px; background: var(--accent); pointer-events: none; border-radius: 0;
   }
+
+  /* Playback controls */
+  .pb-row { display: flex; align-items: center; gap: 4px; }
+  .pb-btn {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text1); cursor: pointer; font-size: 11px;
+    width: 26px; height: 22px; border-radius: 1px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.1s;
+  }
+  .pb-btn:hover { background: var(--bg5); color: var(--text0); }
+  .pb-btn.play-active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-hi); }
+  #pb-speed {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 3px; background: var(--bg4); border-radius: 0; outline: none; cursor: pointer;
+  }
+  #pb-speed::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 8px; height: 14px; border-radius: 1px;
+    background: var(--text1); cursor: pointer;
+  }
+  .pb-spd-label { font-family: var(--mono); font-size: 9px; color: var(--text2); }
+  .pb-spd-val { font-family: var(--mono); font-size: 9px; color: var(--text1); min-width: 28px; text-align: right; }
+
+  /* Violations bar */
+  #violations-bar {
+    display: none; background: #0f0808;
+    border-top: 1px solid #5a1a1a; padding: 5px 12px; max-height: 80px; overflow-y: auto;
+  }
+  #violations-bar .vb-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;
+  }
+  #violations-bar .vb-title { font-family: var(--mono); font-size: 9px; color: #cc4444; letter-spacing: 0.1em; }
+  #violations-bar .vb-close {
+    background: none; border: none; color: var(--text2); cursor: pointer; font-size: 12px;
+  }
+  #violations-list { font-family: var(--mono); font-size: 9px; color: #c08080; line-height: 1.7; }
 
   /* ── Right panel ── */
   #right-panel {
@@ -159,237 +286,229 @@
     display: flex; flex-direction: column; overflow: hidden;
   }
 
-  .panel-section {
+  /* Panel sections */
+  .ps {
     border-bottom: 1px solid var(--border);
-    padding: 12px 14px;
-  }
-  .panel-section:last-child { border-bottom: none; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-  .section-label {
-    font-size: 9px; font-family: var(--mono); color: var(--text2);
-    letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px;
-  }
-
-  /* Axis readout */
-  .axis-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-  }
-  .axis-cell {
-    background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--r-sm); padding: 6px 8px;
-  }
-  .axis-cell .axis-name { font-size: 9px; font-family: var(--mono); font-weight: 600; margin-bottom: 2px; }
-  .axis-cell .axis-val { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text0); }
-
-  /* Type badge */
-  #type-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-family: var(--mono); font-size: 11px; font-weight: 500;
-    padding: 4px 10px; border-radius: 20px;
-    border: 1px solid var(--border); background: var(--bg2);
-  }
-  #type-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
-
-  /* Stats */
-  .stat-row {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 3px 0; border-bottom: 1px solid var(--border);
-  }
-  .stat-row:last-child { border-bottom: none; }
-  .stat-row .k { font-size: 11px; color: var(--text1); display: flex; align-items: center; gap: 6px; }
-  .stat-row .k .dot { width: 5px; height: 5px; border-radius: 50; flex-shrink:0; border-radius:50%; }
-  .stat-row .v { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--text0); }
-
-  /* G-code panel */
-  #gcode-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-  #gcode-ctx {
-    flex: 1; overflow-y: auto; font-family: var(--mono); font-size: 10px;
-    line-height: 1.8; scrollbar-width: thin; scrollbar-color: var(--bg4) transparent;
-  }
-  #gcode-ctx::-webkit-scrollbar { width: 3px; }
-  #gcode-ctx::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
-  .gc-line { display: flex; gap: 6px; padding: 1px 4px; border-radius: 3px; }
-  .gc-line.current { background: rgba(59,130,246,0.12); }
-  .gc-ln { color: var(--text2); min-width: 28px; text-align: right; flex-shrink: 0; }
-  .gc-code { color: var(--text1); }
-  .gc-line.current .gc-code { color: var(--text0); }
-  .gc-cmd { color: var(--amber); }
-  .gc-axis { color: var(--cyan); }
-  .gc-comment { color: var(--text2); }
-
-  /* ── Collision configurator modal ── */
-  #coll-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-    z-index: 110; align-items: center; justify-content: center;
-  }
-  #coll-overlay.open { display: flex; }
-  #coll-modal {
-    background: var(--bg1); border: 1px solid var(--border-hi);
-    border-radius: var(--r); width: 520px; max-height: 85vh;
-    display: flex; flex-direction: column;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-  }
-  #coll-modal header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 16px; border-bottom: 1px solid var(--border);
-    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
     flex-shrink: 0;
   }
-  #coll-modal header button { background:none;border:none;color:var(--text1);cursor:pointer;font-size:18px; }
-  #coll-list { flex:1; overflow-y:auto; padding: 8px 0; }
-  .coll-proxy {
-    display: grid; grid-template-columns: 70px 55px 60px 1fr 1fr 1fr 28px;
-    gap: 4px; align-items: center; padding: 5px 12px;
-    border-bottom: 1px solid var(--border); font-size: 11px;
+  .ps-head {
+    background: var(--bg2); padding: 4px 10px;
+    font-family: var(--mono); font-size: 9px; color: var(--text2);
+    letter-spacing: 0.12em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
   }
-  .coll-proxy:hover { background: var(--bg2); }
-  .coll-proxy input, .coll-proxy select {
+  .ps-body { padding: 8px 10px; }
+
+  /* Axis readout — horizontal bar per axis */
+  .ax-row {
+    display: grid; grid-template-columns: 16px 1fr 64px;
+    align-items: center; gap: 5px; padding: 2px 0;
+  }
+  .ax-lbl { font-family: var(--mono); font-size: 10px; font-weight: 700; }
+  .ax-bar-wrap { height: 3px; background: var(--bg4); border-radius: 0; overflow: hidden; }
+  .ax-bar { height: 100%; border-radius: 0; transition: width 0.1s; }
+  .ax-num { font-family: var(--mono); font-size: 10px; text-align: right; color: var(--text0); }
+
+  /* Move type badge */
+  #type-badge {
+    margin-top: 6px; display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 9px; color: var(--text1);
+    background: var(--bg3); border: 1px solid var(--border);
+    padding: 2px 7px; letter-spacing: 0.06em;
+  }
+  #type-badge .dot { width: 5px; height: 5px; border-radius: 50%; }
+
+  /* Stats rows */
+  .st-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 2px 0; border-bottom: 1px solid var(--border);
+  }
+  .st-row:last-child { border-bottom: none; }
+  .st-k { font-size: 10px; color: var(--text1); display: flex; align-items: center; gap: 5px; }
+  .st-k .dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
+  .st-v { font-family: var(--mono); font-size: 10px; color: var(--text0); }
+
+  /* G-code panel */
+  #gcode-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  #gcode-ctx {
+    flex: 1; overflow-y: auto; font-family: var(--mono); font-size: 9px;
+    line-height: 1.9; scrollbar-width: thin; scrollbar-color: var(--bg4) transparent;
+    padding: 2px 0;
+  }
+  #gcode-ctx::-webkit-scrollbar { width: 3px; }
+  #gcode-ctx::-webkit-scrollbar-thumb { background: var(--bg4); }
+  .gc-line { display: flex; gap: 5px; padding: 0 10px; }
+  .gc-line.current { background: rgba(40,120,200,0.15); border-left: 2px solid var(--accent); }
+  .gc-ln { color: var(--text3); min-width: 26px; text-align: right; flex-shrink: 0; }
+  .gc-code { color: var(--text1); }
+  .gc-line.current .gc-code { color: var(--text0); }
+  .gc-cmd { color: #c8902a; }
+  .gc-axis { color: #4a9fd4; }
+  .gc-comment { color: var(--text3); }
+
+  /* ── Modals ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--bg2); border: 1px solid var(--border-hi);
+    border-top: 2px solid var(--accent);
+    width: 420px; max-height: 85vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  }
+  .modal-box.wide { width: 560px; }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+  .modal-head .title { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: var(--text0); }
+  .modal-head .close-btn { background: none; border: none; color: var(--text1); cursor: pointer; font-size: 16px; }
+  .modal-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .modal-section:last-child { border-bottom: none; }
+  .modal-section-title { font-family: var(--mono); font-size: 9px; color: var(--text2); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
+  .s-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+  .s-row:last-child { margin-bottom: 0; }
+  .s-label { font-size: 11px; color: var(--text1); }
+  .s-hint { font-size: 9px; color: var(--text2); margin-top: 2px; margin-bottom: 6px; line-height: 1.5; }
+  .s-input {
     background: var(--bg3); border: 1px solid var(--border-hi);
-    color: var(--text0); font-family: var(--mono); font-size: 10px;
-    padding: 3px 5px; border-radius: 3px; width: 100%;
+    color: var(--text0); font-family: var(--mono); font-size: 11px;
+    padding: 4px 6px; border-radius: 0; width: 80px; text-align: right;
+  }
+  .s-input:focus { outline: 1px solid var(--accent); }
+  .s-color { width: 28px; height: 22px; padding: 1px; border-radius: 0; border: 1px solid var(--border-hi); background: var(--bg3); cursor: pointer; }
+  .s-apply {
+    width: 100%; padding: 7px; background: var(--accent); border: none;
+    color: #fff; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .s-apply:hover { background: var(--accent-hi); }
+
+  /* Settings chip */
+  .s-chip {
+    display: flex; align-items: center; gap: 5px;
+    background: var(--bg3); border: 1px solid var(--border);
+    padding: 3px 8px; cursor: pointer; font-family: var(--mono); font-size: 9px;
+    color: var(--text2); letter-spacing: 0.05em; user-select: none; border-radius: 0;
+  }
+  .s-chip input { display: none; }
+  .s-chip .dot { width: 5px; height: 5px; border-radius: 50%; }
+  .s-chip.on { background: var(--bg5); border-color: var(--border-hi); color: var(--text0); }
+
+  /* Collision modal */
+  #coll-modal { width: 560px; }
+  .coll-proxy {
+    display: grid; grid-template-columns: 70px 55px 60px 1fr 1fr 1fr 26px;
+    gap: 3px; align-items: center; padding: 4px 10px;
+    border-bottom: 1px solid var(--border); font-size: 10px;
+  }
+  .coll-proxy:hover { background: var(--bg3); }
+  .coll-proxy input, .coll-proxy select {
+    background: var(--bg4); border: 1px solid var(--border);
+    color: var(--text0); font-family: var(--mono); font-size: 9px;
+    padding: 2px 4px; border-radius: 0; width: 100%;
   }
   .coll-proxy .del-btn {
     background: none; border: none; color: var(--text2);
-    cursor: pointer; font-size: 14px; line-height: 1; padding: 0;
+    cursor: pointer; font-size: 13px; line-height: 1; padding: 0;
   }
   .coll-proxy .del-btn:hover { color: var(--red); }
   #coll-footer {
-    padding: 10px 12px; border-top: 1px solid var(--border);
-    display: flex; gap: 8px; flex-shrink: 0;
+    padding: 8px 10px; border-top: 1px solid var(--border);
+    display: flex; gap: 6px; flex-wrap: wrap;
   }
   .coll-header-row {
-    display: grid; grid-template-columns: 70px 60px 1fr 1fr 1fr 1fr 28px;
-    gap: 4px; padding: 4px 12px;
-    font-size: 9px; font-family: var(--mono); color: var(--text2);
+    display: grid; grid-template-columns: 70px 55px 60px 1fr 1fr 1fr 26px;
+    gap: 3px; padding: 3px 10px;
+    font-size: 8px; font-family: var(--mono); color: var(--text2);
     letter-spacing: 0.08em; border-bottom: 1px solid var(--border);
+    background: var(--bg2);
   }
-  #coll-status {
-    font-size: 10px; font-family: var(--mono); padding: 6px 12px;
-    border-top: 1px solid var(--border); flex-shrink: 0;
-    color: var(--text2); min-height: 24px;
+  #coll-status { font-size: 9px; font-family: var(--mono); padding: 5px 10px; color: var(--text2); border-top: 1px solid var(--border); min-height: 22px; }
+
+  /* Machine opacity slider */
+  .s-mach-op {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 3px; background: var(--bg4); border-radius: 0; outline: none; cursor: pointer;
   }
+  .s-mach-op::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 14px; border-radius: 0; background: var(--text1); cursor: pointer; }
 
   /* ── Mobile ── */
   @media (max-width: 640px) {
     html, body { overflow: auto; }
     #app { grid-template-rows: auto 1fr; overflow: auto; height: auto; min-height: 100vh; }
-    #header { flex-wrap: wrap; height: auto; padding: 8px 10px; gap: 6px; }
-    #header .spacer { display: none; }
-    .h-sep { display: none; }
-    #fname { display: none; }
-    .chip-row { flex-wrap: wrap; }
-    #body { grid-template-columns: 1fr; grid-template-rows: 60vw auto; overflow: visible; }
-    #canvas-col { height: 60vw; min-height: 260px; flex-shrink: 0; }
-    #cv-wrap { height: 100%; }
-    #corner-tl { display: none; }
-    #right-panel {
-      border-left: none; border-top: 1px solid var(--border);
-      display: grid; grid-template-columns: 1fr 1fr;
-      overflow: visible; max-height: none; height: auto;
-    }
-    .panel-section { border-right: 1px solid var(--border); }
-    .panel-section:last-child { grid-column: 1 / -1; max-height: 180px; }
-    #gcode-ctx { max-height: 140px; }
-    .axis-grid { grid-template-columns: repeat(3, 1fr); }
-    #progress-area { padding: 8px 10px; }
-    #prog::-webkit-slider-thumb { width: 20px; height: 20px; }
-    #pb-speed::-webkit-slider-thumb { width: 20px; height: 20px; }
-    #settings-modal { width: calc(100vw - 24px); max-height: 90vh; }
-    .s-input { width: 72px; }
+    #header { flex-wrap: wrap; height: auto; padding: 6px 8px; gap: 4px; }
+    #tb-fname { display: none; }
+    #body { grid-template-columns: 1fr; grid-template-rows: auto 60vw auto; overflow: visible; }
+    #jog-panel { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); }
+    #canvas-col { height: 60vw; min-height: 240px; flex-shrink: 0; }
+    #right-panel { border-left: none; border-top: 1px solid var(--border); max-height: 300px; }
+    .modal-box, .modal-box.wide { width: calc(100vw - 16px); max-height: 90vh; }
   }
-
-  /* ── Settings modal ── */
-  #settings-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-    z-index: 100; align-items: center; justify-content: center;
-  }
-  #settings-overlay.open { display: flex; }
-  #settings-modal {
-    background: var(--bg1); border: 1px solid var(--border-hi);
-    border-radius: var(--r); width: 380px; max-height: 80vh;
-    overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-  }
-  #settings-modal header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 16px; border-bottom: 1px solid var(--border);
-    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
-  }
-  #settings-modal header button {
-    background: none; border: none; color: var(--text1); cursor: pointer; font-size: 18px; line-height: 1;
-  }
-  .s-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-  .s-section:last-child { border-bottom: none; }
-  .s-section-title {
-    font-size: 9px; font-family: var(--mono); color: var(--text2);
-    letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 10px;
-  }
-  .s-row {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 8px; margin-bottom: 8px;
-  }
-  .s-row:last-child { margin-bottom: 0; }
-  .s-label { font-size: 12px; color: var(--text1); }
-  .s-input {
-    background: var(--bg3); border: 1px solid var(--border-hi);
-    color: var(--text0); font-family: var(--mono); font-size: 12px;
-    padding: 4px 8px; border-radius: var(--r-sm); width: 90px; text-align: right;
-  }
-  .s-input:focus { outline: 1px solid var(--accent); }
-  .s-hint { font-size: 10px; color: var(--text2); margin-top: 2px; }
-  .s-color { width: 32px; height: 28px; padding: 2px; border-radius: var(--r-sm); border: 1px solid var(--border-hi); background: var(--bg3); cursor: pointer; }
-  .s-apply {
-    width: 100%; padding: 8px; background: var(--accent-dim); border: 1px solid var(--accent);
-    color: var(--accent); font-family: var(--sans); font-size: 12px; border-radius: var(--r-sm);
-    cursor: pointer; margin-top: 4px; transition: background 0.15s;
-  }
-  .s-apply:hover { background: rgba(59,130,246,0.25); }
 </style>
 </head>
 <body>
 <div id="app">
 
-  <!-- Header -->
+  <!-- Titlebar -->
   <div id="header">
-    <div class="logo">5AXIS.SIM</div>
-    <div class="h-sep"></div>
-    <button class="h-btn primary" id="loadBtn">↑ Load G-code</button>
-    <input type="file" id="fi" accept=".gcode,.nc,.txt" style="display:none">
-    <select id="exampleSelect" class="h-select">
-      <option value="">⬇ Examples…</option>
-    </select>
-    <span id="fname">no file loaded</span>
-    <span id="status"></span>
-    <div class="spacer"></div>
-    <div class="chip-row" id="chips">
-      <label class="chip on" id="chip-se"><input type="checkbox" id="se" checked><span class="dot" style="background:#3b82f6"></span>3-axis</label>
-      <label class="chip on" id="chip-s5"><input type="checkbox" id="s5" checked><span class="dot" style="background:#ef4444"></span>5-axis</label>
-      <label class="chip" id="chip-st"><input type="checkbox" id="st"><span class="dot" style="background:#f59e0b"></span>Travel</label>
-      <label class="chip" id="chip-sc"><input type="checkbox" id="sc"><span class="dot" style="background:#a855f7"></span>By layer</label>
-      <label class="chip" id="chip-mach"><input type="checkbox" id="showMach"><span class="dot" style="background:#64748b"></span>Machine</label>
+    <div class="logo-block">5AXIS<span>.SIM</span></div>
+
+    <div class="tb-group">
+      <button class="tb-btn primary" id="loadBtn"><span class="tb-icon">↑</span> OPEN</button>
+      <input type="file" id="fi" accept=".gcode,.nc,.txt" style="display:none">
+      <select id="exampleSelect" class="tb-select">
+        <option value="">Examples…</option>
+      </select>
     </div>
-    <div class="h-sep"></div>
-    <select id="machineSelect" class="h-select">
-      <option value="">Select machine…</option>
-    </select>
-    <div class="h-sep"></div>
-    <span style="font-size:11px;color:var(--text2);font-family:var(--mono);">nozzle</span>
-    <input type="number" class="h-num" id="nozzle" value="0.4" step="0.05" min="0.1" max="2.0">
-    <span style="font-size:11px;color:var(--text2);font-family:var(--mono);">mm</span>
-    <div class="h-sep"></div>
-    <select class="h-select" id="viewMode" style="display:none;">
+
+    <div class="tb-group">
+      <span class="tb-label">DISPLAY</span>
+      <div class="chip-group">
+        <label class="chip on" id="chip-se"><input type="checkbox" id="se" checked><span class="dot" style="background:var(--ax-z)"></span>3AX</label>
+        <label class="chip on" id="chip-s5"><input type="checkbox" id="s5" checked><span class="dot" style="background:var(--ax-x)"></span>5AX</label>
+        <label class="chip" id="chip-st"><input type="checkbox" id="st"><span class="dot" style="background:var(--ax-b)"></span>TRVL</label>
+        <label class="chip" id="chip-sc"><input type="checkbox" id="sc"><span class="dot" style="background:var(--ax-c)"></span>LAYER</label>
+      </div>
+    </div>
+
+    <div class="tb-group">
+      <span class="tb-label">MACHINE</span>
+      <label class="chip" id="chip-mach"><input type="checkbox" id="showMach"><span class="dot" style="background:var(--text1)"></span>SHOW</label>
+      <select id="machineSelect" class="tb-select" style="max-width:130px;">
+        <option value="">— no machine —</option>
+      </select>
+    </div>
+
+    <div class="tb-group">
+      <span class="tb-label">NOZZLE</span>
+      <input type="number" class="tb-num" id="nozzle" value="0.4" step="0.05" min="0.1" max="2.0">
+      <span class="tb-label">mm</span>
+    </div>
+
+    <select class="tb-select" id="viewMode" style="display:none;">
       <option value="machine" selected>Machine frame</option>
     </select>
-    <div class="h-sep"></div>
-    <button class="h-btn" id="settingsBtn" title="Scene settings">⚙ Settings</button>
-    <button class="h-btn" id="collBtn" title="Collision configurator" style="border-color:rgba(239,68,68,0.4);color:#ef4444;">⬡ Collision</button>
+
+    <div class="tb-spacer"></div>
+    <span id="tb-fname"></span>
+    <span id="tb-status"></span>
+
+    <div class="tb-group" style="border-left:1px solid var(--border);border-right:none;">
+      <button class="tb-btn" id="settingsBtn">⚙ SETTINGS</button>
+      <button class="tb-btn danger" id="collBtn">⬡ COLLISION</button>
+    </div>
   </div>
 
   <!-- Collision configurator modal -->
-  <div id="coll-overlay">
-    <div id="coll-modal">
-      <header>
-        <span>COLLISION PROXIES</span>
+  <div id="coll-overlay" class="modal-overlay">
+    <div id="coll-modal" class="modal-box wide">
+      <div class="modal-head">
+        <span class="title">COLLISION PROXIES</span>
         <div style="display:flex;align-items:center;gap:10px;">
           <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;">
             <input type="checkbox" id="coll-show-proxies" checked>
@@ -399,9 +518,9 @@
             <input type="checkbox" id="coll-enabled" checked>
             <span style="color:var(--text1);">Check collisions</span>
           </label>
-          <button id="collClose">×</button>
+          <button class="close-btn" id="collClose">×</button>
         </div>
-      </header>
+      </div>
       <div style="padding:6px 12px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--cyan);" id="coll-selected-part">Click a machine part in the 3D view to select it for proxy assignment</div>
       <div id="coll-groups-bar" style="padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>
@@ -424,16 +543,16 @@
   </div>
 
   <!-- Settings modal -->
-  <div id="settings-overlay">
-    <div id="settings-modal">
-      <header>
-        <span>SCENE SETTINGS</span>
-        <button id="settingsClose">×</button>
-      </header>
+  <div id="settings-overlay" class="modal-overlay">
+    <div id="settings-modal" class="modal-box">
+      <div class="modal-head">
+        <span class="title">SCENE SETTINGS</span>
+        <button class="close-btn" id="settingsClose">×</button>
+      </div>
 
       <!-- Buildplate -->
-      <div class="s-section">
-        <div class="s-section-title">Buildplate</div>
+      <div class="modal-section">
+        <div class="modal-section-title">Buildplate</div>
         <div class="s-row">
           <span class="s-label">Width (X)</span>
           <div style="display:flex;align-items:center;gap:4px;">
@@ -469,8 +588,8 @@
       </div>
 
       <!-- Nozzle -->
-      <div class="s-section">
-        <div class="s-section-title">Nozzle Cone</div>
+      <div class="modal-section">
+        <div class="modal-section-title">Nozzle Cone</div>
         <div class="s-row">
           <span class="s-label">Tip diameter</span>
           <div style="display:flex;align-items:center;gap:4px;">
@@ -514,8 +633,8 @@
       </div>
 
       <!-- Axis Limits -->
-      <div class="s-section">
-        <div class="s-section-title">Axis Limits</div>
+      <div class="modal-section">
+        <div class="modal-section-title">Axis Limits</div>
         <div class="s-hint" style="margin-bottom:10px;">Leave max blank or set to 99999 for infinite (e.g. C axis)</div>
 
         <div style="display:grid;grid-template-columns:1fr 80px 80px;gap:4px 6px;align-items:center;font-size:11px;margin-bottom:6px;">
@@ -545,13 +664,13 @@
         </div>
       </div>
 
-      <div class="s-section">
+      <div class="modal-section">
         <button class="s-apply" id="s-apply-btn">Apply changes</button>
       </div>
 
       <!-- Machine -->
-      <div class="s-section">
-        <div class="s-section-title">Machine Geometry</div>
+      <div class="modal-section">
+        <div class="modal-section-title">Machine Geometry</div>
         <div style="display:grid;grid-template-columns:1fr 52px 80px;gap:5px 8px;align-items:center;font-size:11px;margin-bottom:6px;">
           <span style="color:var(--text2);font-family:var(--mono);">PART</span>
           <span style="color:var(--text2);font-family:var(--mono);">COLOR</span>
@@ -604,20 +723,30 @@
   <!-- Body -->
   <div id="body">
 
-    <!-- Canvas -->
+    <!-- Left: Axis Jog Panel -->
+    <div id="jog-panel">
+      <div class="jp-header">
+        <span>AXIS JOG</span>
+        <span class="jp-status" id="jog-status">PAUSED</span>
+      </div>
+      <div id="jog-axes">
+        <!-- Populated by JS using axis limits -->
+      </div>
+      <button id="jog-home-btn">⌂ RESET ALL TO ZERO</button>
+    </div>
+
+    <!-- Centre: Canvas -->
     <div id="canvas-col">
       <div id="cv-wrap">
         <canvas id="cv"></canvas>
-        <div id="corner-tl">
-          drag = orbit<br>
-          scroll = zoom<br>
-          right-drag = pan
-        </div>
+        <div id="corner-tl">DRAG · ORBIT<br>SCROLL · ZOOM<br>RMB · PAN</div>
         <div id="corner-br" id="perfNote"></div>
       </div>
+
+      <!-- Timeline -->
       <div id="progress-area">
         <div class="prog-meta">
-          <span class="label">PROGRESS</span>
+          <span class="label">TIMELINE</span>
           <span class="val" id="progv">100%</span>
           <span class="move-info" id="moveInfo"></span>
         </div>
@@ -625,72 +754,94 @@
           <div id="prog-fill" style="width:100%"></div>
           <input type="range" id="prog" min="0" max="10000" value="10000">
         </div>
-        <!-- Playback controls -->
-        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-          <button id="pb-start" class="h-btn" title="Go to start" style="padding:3px 8px;font-size:14px;">⏮</button>
-          <button id="pb-play"  class="h-btn" title="Play/Pause"  style="padding:3px 8px;font-size:14px;">▶</button>
-          <button id="pb-stop"  class="h-btn" title="Stop"        style="padding:3px 8px;font-size:14px;">⏹</button>
-          <button id="pb-end"   class="h-btn" title="Go to end"   style="padding:3px 8px;font-size:14px;">⏭</button>
-          <div style="flex:1;display:flex;align-items:center;gap:6px;margin-left:4px;">
-            <span style="font-family:var(--mono);font-size:10px;color:var(--text2);white-space:nowrap;">SPEED</span>
-            <input type="range" id="pb-speed" min="1" max="200" value="20"
-              style="-webkit-appearance:none;appearance:none;flex:1;height:3px;background:var(--bg4);border-radius:2px;outline:none;cursor:pointer;">
-            <span id="pb-speed-val" style="font-family:var(--mono);font-size:10px;color:var(--text1);min-width:36px;text-align:right;">20×</span>
-          </div>
+        <div class="pb-row" style="margin-top:5px;">
+          <button id="pb-start" class="pb-btn" title="Start">⏮</button>
+          <button id="pb-play"  class="pb-btn" title="Play/Pause">▶</button>
+          <button id="pb-stop"  class="pb-btn" title="Stop">⏹</button>
+          <button id="pb-end"   class="pb-btn" title="End">⏭</button>
+          <span class="pb-spd-label" style="margin-left:8px;">SPD</span>
+          <input type="range" id="pb-speed" min="1" max="200" value="20">
+          <span id="pb-speed-val" class="pb-spd-val">20×</span>
         </div>
       </div>
-      <!-- Violations banner -->
-      <div id="violations-bar" style="display:none; background:#1a0a0a; border-top:1px solid #7f1d1d; padding:8px 16px; max-height:120px; overflow-y:auto;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-          <span style="font-family:var(--mono);font-size:10px;color:#ef4444;letter-spacing:0.1em;">⚠ AXIS LIMIT VIOLATIONS</span>
-          <button id="violations-close" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;line-height:1;">×</button>
+
+      <!-- Violations bar -->
+      <div id="violations-bar">
+        <div class="vb-head">
+          <span class="vb-title">⚠ LIMIT / COLLISION VIOLATIONS</span>
+          <button class="vb-close" id="violations-close">×</button>
         </div>
-        <div id="violations-list" style="font-family:var(--mono);font-size:10px;color:#fca5a5;line-height:1.8;"></div>
+        <div id="violations-list"></div>
       </div>
     </div>
 
-    <!-- Right panel -->
+    <!-- Right: Info Panel -->
     <div id="right-panel">
 
-      <!-- Axis positions -->
-      <div class="panel-section">
-        <div class="section-label">Axis Position</div>
-        <div class="axis-grid">
-          <div class="axis-cell"><div class="axis-name" style="color:#ef4444">X</div><div class="axis-val" id="ax-x">0.000</div></div>
-          <div class="axis-cell"><div class="axis-name" style="color:#22c55e">Y</div><div class="axis-val" id="ax-y">0.000</div></div>
-          <div class="axis-cell"><div class="axis-name" style="color:#3b82f6">Z</div><div class="axis-val" id="ax-z">0.000</div></div>
-          <div class="axis-cell"><div class="axis-name" style="color:#f59e0b">B</div><div class="axis-val" id="ax-b">0.0°</div></div>
-          <div class="axis-cell"><div class="axis-name" style="color:#a855f7">C</div><div class="axis-val" id="ax-c">0.0°</div></div>
-          <div class="axis-cell"><div class="axis-name" style="color:var(--text1)">E</div><div class="axis-val" id="ax-e">0.000</div></div>
-        </div>
-        <div style="margin-top:8px;">
-          <div id="type-badge"><span class="dot" id="type-dot"></span><span id="type-label">—</span></div>
+      <!-- Axis readout -->
+      <div class="ps">
+        <div class="ps-head">AXIS POSITION</div>
+        <div class="ps-body">
+          <div class="ax-row">
+            <span class="ax-lbl" style="color:var(--ax-x)">X</span>
+            <div class="ax-bar-wrap"><div class="ax-bar" id="ax-bar-x" style="background:var(--ax-x);width:50%"></div></div>
+            <span class="ax-num" id="ax-x">0.000</span>
+          </div>
+          <div class="ax-row">
+            <span class="ax-lbl" style="color:var(--ax-y)">Y</span>
+            <div class="ax-bar-wrap"><div class="ax-bar" id="ax-bar-y" style="background:var(--ax-y);width:50%"></div></div>
+            <span class="ax-num" id="ax-y">0.000</span>
+          </div>
+          <div class="ax-row">
+            <span class="ax-lbl" style="color:var(--ax-z)">Z</span>
+            <div class="ax-bar-wrap"><div class="ax-bar" id="ax-bar-z" style="background:var(--ax-z);width:0%"></div></div>
+            <span class="ax-num" id="ax-z">0.000</span>
+          </div>
+          <div class="ax-row">
+            <span class="ax-lbl" style="color:var(--ax-b)">B</span>
+            <div class="ax-bar-wrap"><div class="ax-bar" id="ax-bar-b" style="background:var(--ax-b);width:50%"></div></div>
+            <span class="ax-num" id="ax-b">0.0°</span>
+          </div>
+          <div class="ax-row">
+            <span class="ax-lbl" style="color:var(--ax-c)">C</span>
+            <div class="ax-bar-wrap"><div class="ax-bar" id="ax-bar-c" style="background:var(--ax-c);width:50%"></div></div>
+            <span class="ax-num" id="ax-c">0.0°</span>
+          </div>
+          <div class="ax-row">
+            <span class="ax-lbl" style="color:var(--ax-e)">E</span>
+            <div class="ax-bar-wrap"><div class="ax-bar" id="ax-bar-e" style="background:var(--ax-e);width:0%"></div></div>
+            <span class="ax-num" id="ax-e">0.000</span>
+          </div>
+          <div id="type-badge" style="margin-top:6px;"><span class="dot" id="type-dot"></span><span id="type-label">—</span></div>
         </div>
       </div>
 
       <!-- Stats -->
-      <div class="panel-section">
-        <div class="section-label">Stats</div>
-        <div class="stat-row"><span class="k"><span class="dot" style="background:#3b82f6"></span>3-axis beads</span><span class="v" id="c3ax">—</span></div>
-        <div class="stat-row"><span class="k"><span class="dot" style="background:#ef4444"></span>5-axis beads</span><span class="v" id="c5ax">—</span></div>
-        <div class="stat-row"><span class="k"><span class="dot" style="background:#f59e0b"></span>Travel moves</span><span class="v" id="ctrav">—</span></div>
-        <div class="stat-row"><span class="k">Total moves</span><span class="v" id="ctot">—</span></div>
+      <div class="ps">
+        <div class="ps-head">STATISTICS</div>
+        <div class="ps-body">
+          <div class="st-row"><span class="st-k"><span class="dot" style="background:var(--ax-z)"></span>3-axis</span><span class="st-v" id="c3ax">—</span></div>
+          <div class="st-row"><span class="st-k"><span class="dot" style="background:var(--ax-x)"></span>5-axis</span><span class="st-v" id="c5ax">—</span></div>
+          <div class="st-row"><span class="st-k"><span class="dot" style="background:var(--ax-b)"></span>Travel</span><span class="st-v" id="ctrav">—</span></div>
+          <div class="st-row"><span class="st-k">Total</span><span class="st-v" id="ctot">—</span></div>
+        </div>
       </div>
 
       <!-- Print state -->
-      <div class="panel-section">
-        <div class="section-label">Print State</div>
-        <div class="stat-row"><span class="k">Positioning</span><span class="v" id="ps-pos" style="color:var(--cyan);">—</span></div>
-        <div class="stat-row"><span class="k">Extruder</span><span class="v" id="ps-emode" style="color:var(--cyan);">—</span></div>
-        <div class="stat-row"><span class="k">Fan</span><span class="v" id="ps-fan">—</span></div>
-        <div class="stat-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px;">
-          <span class="k">🌡 Hotend</span><span class="v" id="ps-hotend">—</span></div>
-        <div class="stat-row"><span class="k">🌡 Bed</span><span class="v" id="ps-bed">—</span></div>
+      <div class="ps">
+        <div class="ps-head">PRINT STATE</div>
+        <div class="ps-body">
+          <div class="st-row"><span class="st-k">Mode</span><span class="st-v" id="ps-pos" style="color:var(--teal)">—</span></div>
+          <div class="st-row"><span class="st-k">Extruder</span><span class="st-v" id="ps-emode" style="color:var(--teal)">—</span></div>
+          <div class="st-row"><span class="st-k">Fan</span><span class="st-v" id="ps-fan">—</span></div>
+          <div class="st-row"><span class="st-k">Hotend</span><span class="st-v" id="ps-hotend">—</span></div>
+          <div class="st-row"><span class="st-k">Bed</span><span class="st-v" id="ps-bed">—</span></div>
+        </div>
       </div>
 
       <!-- G-code -->
-      <div class="panel-section" id="gcode-panel">
-        <div class="section-label">G-code</div>
+      <div class="ps" id="gcode-panel" style="flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;border-bottom:none;">
+        <div class="ps-head">G-CODE</div>
         <div id="gcode-ctx"></div>
       </div>
 
@@ -1014,7 +1165,7 @@ async function loadMachine(machineName){
     machineGroup.visible=true; return;
   }
   disposeMachine();
-  document.getElementById('status').textContent='loading machine…';
+  document.getElementById('tb-status').textContent='loading machine…';
 
   // Bed side: Frame > Z > B > C (C IS the bed)
   mGrp.Frame = new THREE.Group(); machineGroup.add(mGrp.Frame);
@@ -1041,7 +1192,7 @@ async function loadMachine(machineName){
         mesh.rotation.x=-Math.PI/2;
         mGrp[name].add(mesh);
         loaded++;
-        document.getElementById('status').textContent=`loading machine… ${loaded}/${MACHINE_PARTS.length}`;
+        document.getElementById('tb-status').textContent=`loading machine… ${loaded}/${MACHINE_PARTS.length}`;
         resolve();
       },
       null,
@@ -1052,7 +1203,7 @@ async function loadMachine(machineName){
   await Promise.all(promises);
   machineLoaded=true;
   currentMachineName=machineName;
-  document.getElementById('status').textContent='';
+  document.getElementById('tb-status').textContent='';
   setSimpleSceneVisible(false);
   // Try to load collision.json for this machine
   try{
@@ -1332,8 +1483,29 @@ function applyProgress(pct){
   updateMachine(moveIdx);
 }
 
-const TYPE_LABELS={e3:'3-axis extrude',e5:'5-axis extrude',travel:'Travel'};
-const TYPE_COLORS={e3:'#3b82f6',e5:'#ef4444',travel:'#f59e0b'};
+// Update axis position bar indicators
+function updateAxisBars(m){
+  if(!m) return;
+  const L = getLimits();
+  const axes = [
+    {key:'x', val:m.mx, min:L.xmin, max:L.xmax},
+    {key:'y', val:m.my, min:L.ymin, max:L.ymax},
+    {key:'z', val:m.mz, min:L.zmin, max:L.zmax},
+    {key:'b', val:m.mb, min:L.bmin, max:L.bmax},
+    {key:'c', val:m.mc, min:-360,   max:360},
+    {key:'e', val:m.me, min:0,       max:Math.max(m.me||1,1)},
+  ];
+  for(const ax of axes){
+    const bar = document.getElementById('ax-bar-'+ax.key);
+    if(!bar) continue;
+    const range = ax.max - ax.min;
+    const pct = range>0 ? Math.max(0,Math.min(100,((ax.val-ax.min)/range)*100)) : 50;
+    bar.style.width = pct+'%';
+  }
+}
+
+const TYPE_LABELS={e3:'3-AXIS EXTRUDE',e5:'5-AXIS EXTRUDE',travel:'TRAVEL'};
+const TYPE_COLORS={e3:'var(--ax-z)',e5:'var(--ax-x)',travel:'var(--ax-b)'};
 
 function updateReadout(moveIdx){
   if(!allMoves.length||moveIdx===0){
@@ -1353,6 +1525,8 @@ function updateReadout(moveIdx){
   document.getElementById('ax-b').textContent=m.mb.toFixed(1)+'°';
   document.getElementById('ax-c').textContent=m.mc.toFixed(1)+'°';
   document.getElementById('ax-e').textContent=m.me.toFixed(3);
+  updateAxisBars(m);
+  syncJogFromMove(m);
   document.getElementById('type-label').textContent=TYPE_LABELS[m.type]||m.type;
   document.getElementById('type-dot').style.background=TYPE_COLORS[m.type]||'';
   // Print state
@@ -1396,14 +1570,14 @@ function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 // ── Rebuild ───────────────────────────────────────────────────────
 function rebuildAll(resetProgress){
   if(!cachedText) return;
-  document.getElementById('status').textContent='building…';
+  document.getElementById('tb-status').textContent='building…';
   setTimeout(()=>{
     allMoves=parseGcode(cachedText);
     buildMeshes(parseFloat(document.getElementById('nozzle').value)||0.4);
     if(resetProgress) document.getElementById('prog').value=10000;
     applyProgress(parseInt(document.getElementById('prog').value));
     checkLimits();
-    document.getElementById('status').textContent='';
+    document.getElementById('tb-status').textContent='';
   },10);
 }
 
@@ -1474,8 +1648,8 @@ function checkLimits(){
 document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('fi').click());
 document.getElementById('fi').addEventListener('change',ev=>{
   const f=ev.target.files[0]; if(!f) return;
-  document.getElementById('fname').textContent=f.name;
-  document.getElementById('status').textContent='parsing…';
+  document.getElementById('tb-fname').textContent=f.name;
+  document.getElementById('tb-status').textContent='parsing…';
   const r=new FileReader();
   r.onload=e=>{cachedText=e.target.result; rebuildAll(true);};
   r.readAsText(f);
@@ -1532,7 +1706,8 @@ let isPlaying=false;
 
 function setPlaying(val){
   isPlaying=val;
-  document.getElementById('pb-play').textContent=val?'⏸':'▶';
+  const pbp=document.getElementById('pb-play'); pbp.textContent=val?'⏸':'▶'; pbp.classList.toggle('play-active',val);
+  setJogEnabled(!val);
 }
 
 function stepForward(){
@@ -2186,6 +2361,142 @@ document.getElementById('coll-import-file').addEventListener('change',e=>{
 initThree();
 initStaticSceneLate();
 fetchMachineList();
+
+// ── Axis jog panel ────────────────────────────────────────────────
+const JOG_AXES = [
+  {key:'x', label:'X', color:'var(--ax-x)', min:-50, max:50,  step:0.1,  unit:'mm', deg:false},
+  {key:'y', label:'Y', color:'var(--ax-y)', min:-50, max:50,  step:0.1,  unit:'mm', deg:false},
+  {key:'z', label:'Z', color:'var(--ax-z)', min:0,   max:90,  step:0.1,  unit:'mm', deg:false},
+  {key:'b', label:'B', color:'var(--ax-b)', min:-120,max:32,  step:0.5,  unit:'°',  deg:true},
+  {key:'c', label:'C', color:'var(--ax-c)', min:-360,max:360, step:1,    unit:'°',  deg:true},
+];
+
+// Jog state — current manual positions
+let jogPos = {x:0, y:0, z:0, b:0, c:0};
+let jogActive = false; // true when in jog mode (playback paused)
+
+function buildJogPanel(){
+  const container = document.getElementById('jog-axes');
+  container.innerHTML = '';
+  for(const ax of JOG_AXES){
+    const div = document.createElement('div');
+    div.className = 'jog-axis';
+    div.innerHTML = `
+      <div class="jog-axis-head">
+        <span class="jog-axis-name" style="color:${ax.color}">${ax.label}</span>
+        <span class="jog-axis-val" id="jog-val-${ax.key}">${jogPos[ax.key].toFixed(ax.deg?1:3)} ${ax.unit}</span>
+      </div>
+      <input type="range" class="jog-slider" id="jog-${ax.key}"
+        min="${ax.min}" max="${ax.max}" step="${ax.step}" value="${jogPos[ax.key]}"
+        style="background:var(--bg4);"
+        oninput="onJogInput('${ax.key}', this.value)">
+      <div class="jog-range-labels"><span>${ax.min}${ax.unit}</span><span>${ax.max}${ax.unit}</span></div>
+    `;
+    // Style slider thumb color
+    const style = document.createElement('style');
+    style.textContent = `#jog-${ax.key}::-webkit-slider-thumb { background: ${ax.color}; }`;
+    div.appendChild(style);
+    container.appendChild(div);
+  }
+}
+
+function onJogInput(key, val){
+  if(isPlaying) return; // only when paused
+  jogPos[key] = parseFloat(val);
+  document.getElementById(`jog-val-${key}`).textContent =
+    jogPos[key].toFixed(JOG_AXES.find(a=>a.key===key)?.deg ? 1 : 3) + ' ' +
+    (JOG_AXES.find(a=>a.key===key)?.unit||'');
+  applyJogPosition();
+}
+
+function applyJogPosition(){
+  // Update axis readout
+  document.getElementById('ax-x').textContent = jogPos.x.toFixed(3);
+  document.getElementById('ax-y').textContent = jogPos.y.toFixed(3);
+  document.getElementById('ax-z').textContent = jogPos.z.toFixed(3);
+  document.getElementById('ax-b').textContent = jogPos.b.toFixed(1)+'°';
+  document.getElementById('ax-c').textContent = jogPos.c.toFixed(1)+'°';
+  updateAxisBars({mx:jogPos.x,my:jogPos.y,mz:jogPos.z,mb:jogPos.b,mc:jogPos.c,me:0});
+
+  // Update nozzle and bed
+  const fakeMove = {mx:jogPos.x,my:jogPos.y,mz:jogPos.z,mb:jogPos.b,mc:jogPos.c,me:0};
+  // Temporarily inject into allMoves[0] slot for update functions
+  const saved = allMoves[0];
+  allMoves[0] = fakeMove;
+  updateNozzlePositionFromMove(fakeMove);
+  updateBedRotationFromMove(fakeMove);
+  updateMachineFromMove(fakeMove);
+  if(saved !== undefined) allMoves[0] = saved;
+}
+
+// Jog-aware versions that take a move directly
+function updateNozzlePositionFromMove(m){
+  if(!nozzleMesh) return;
+  const usePart = document.getElementById('viewMode').value==='part';
+  if(usePart){
+    const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
+    nozzleMesh.position.set(wx,wz,-wy);
+    nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180,m.mc*Math.PI/180));
+  } else {
+    nozzleMesh.position.set(m.mx,0,-m.my);
+    nozzleMesh.quaternion.set(0,0,0,1);
+  }
+}
+function updateBedRotationFromMove(m){
+  const usePart = document.getElementById('viewMode').value==='part';
+  if(usePart||!m){bedGroup.quaternion.set(0,0,0,1);bedGroup.position.set(0,0,0);return;}
+  bedGroup.quaternion.copy(calcBedQuat(m.mb*Math.PI/180,m.mc*Math.PI/180));
+  bedGroup.position.set(0,-m.mz,0);
+}
+function updateMachineFromMove(m){
+  if(!machineLoaded||!machineGroup.parent) return;
+  machineGroup.visible=document.getElementById('showMach').checked;
+  if(!machineGroup.visible) return;
+  const ox=parseFloat(document.getElementById('mc-ox').value)||0;
+  const oy=parseFloat(document.getElementById('mc-oy').value)||0;
+  const oz=parseFloat(document.getElementById('mc-oz').value)||0;
+  machineGroup.position.set(ox,oz,-oy);
+  if(mGrp.Z) mGrp.Z.position.set(0,-m.mz,0);
+  if(mGrp.B){mGrp.B.rotation.set(0,0,0);mGrp.B.rotateZ(-m.mb*Math.PI/180);}
+  if(mGrp.C){mGrp.C.rotation.set(0,0,0);mGrp.C.rotateY(-m.mc*Math.PI/180);}
+  if(mGrp.Y) mGrp.Y.position.set(0,0,-m.my);
+  if(mGrp.X) mGrp.X.position.set(m.mx,0,0);
+}
+
+function setJogEnabled(enabled){
+  const panel = document.getElementById('jog-axes');
+  panel.classList.toggle('jp-disabled', !enabled);
+  document.getElementById('jog-home-btn').classList.toggle('jp-disabled', !enabled);
+  document.getElementById('jog-status').textContent = enabled ? 'ACTIVE' : 'PAUSED';
+  document.getElementById('jog-status').style.color = enabled ? 'var(--green)' : 'var(--amber)';
+}
+
+document.getElementById('jog-home-btn').addEventListener('click',()=>{
+  if(isPlaying) return;
+  jogPos = {x:0,y:0,z:0,b:0,c:0};
+  JOG_AXES.forEach(ax=>{
+    const el = document.getElementById('jog-'+ax.key);
+    if(el) el.value = 0;
+    const vEl = document.getElementById('jog-val-'+ax.key);
+    if(vEl) vEl.textContent = '0.000 '+(ax.unit||'');
+  });
+  applyJogPosition();
+});
+
+// Sync jog sliders when progress scrubs to a position
+function syncJogFromMove(m){
+  if(!m) return;
+  jogPos.x=m.mx; jogPos.y=m.my; jogPos.z=m.mz; jogPos.b=m.mb; jogPos.c=m.mc;
+  JOG_AXES.forEach(ax=>{
+    const el=document.getElementById('jog-'+ax.key);
+    if(el) el.value=jogPos[ax.key];
+    const vEl=document.getElementById('jog-val-'+ax.key);
+    if(vEl) vEl.textContent=jogPos[ax.key].toFixed(ax.deg?1:3)+' '+(ax.unit||'');
+  });
+}
+
+buildJogPanel();
+setJogEnabled(false); // disabled until playback pauses
 const REPO_API = 'https://api.github.com/repos/Koaladeen/5-axis-3D-print-G-code-simulator/contents/Example%20G-Codes';
 const REPO_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-print-G-code-simulator/main/Example%20G-Codes';
 
@@ -2213,15 +2524,15 @@ const REPO_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-print-G-
 
 document.getElementById('exampleSelect').addEventListener('change', async function(){
   const name=this.value; if(!name) return;
-  document.getElementById('status').textContent='fetching…';
-  document.getElementById('fname').textContent=name;
+  document.getElementById('tb-status').textContent='fetching…';
+  document.getElementById('tb-fname').textContent=name;
   try{
     const res = await fetch(`${REPO_RAW}/${encodeURIComponent(name)}`);
     if(!res.ok) throw new Error('HTTP '+res.status);
     cachedText=await res.text();
     rebuildAll(true);
   }catch(e){
-    document.getElementById('status').textContent='fetch failed';
+    document.getElementById('tb-status').textContent='fetch failed';
     console.error(e);
   }
   this.value='';
