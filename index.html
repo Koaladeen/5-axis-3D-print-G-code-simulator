@@ -2292,6 +2292,8 @@ function checkCollisions(){
     }
   }
   document.getElementById('coll-status').textContent=loopDebug.join(' | ')||'no pairs checked';
+  // Also write to always-visible report panel
+  if(report) report.innerHTML='<div style="font-size:9px;color:var(--text2);">'+(loopDebug.join(' | ')||'no pairs checked')+'</div>';
   if(report){
     if(violations.length){
       report.innerHTML=violations.map(v=>'<div style="color:var(--red);">! '+v+'</div>').join('');
