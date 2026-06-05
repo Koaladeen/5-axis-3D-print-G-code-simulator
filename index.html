@@ -1015,7 +1015,7 @@ function buildNozzle(){
 // Canonical bed quaternion for machine frame (bed tilts away from nozzle)
 function calcBedQuat(bRad, cRad){
   const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad);
-  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0), -cRad);
+  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0), cRad);
   return new THREE.Quaternion().copy(qB).multiply(qC);
 }
 
@@ -1209,7 +1209,7 @@ function updateMachine(moveIdx){
   // Bed side: Z↑, B rotates Y, C IS the bed (rotates on B-local Y)
   if(mGrp.Z) mGrp.Z.position.set(0, -mz, 0);
   if(mGrp.B){ mGrp.B.rotation.set(0,0,0); mGrp.B.rotateZ(-mb*Math.PI/180); }
-  if(mGrp.C){ mGrp.C.rotation.set(0,0,0); mGrp.C.rotateY(-mc*Math.PI/180); }
+  if(mGrp.C){ mGrp.C.rotation.set(0,0,0); mGrp.C.rotateY(mc*Math.PI/180); }
 
   // Toolhead side: Y translates in -Z, X carries toolhead
   if(mGrp.Y) mGrp.Y.position.set(0, 0, -my);
@@ -2206,6 +2206,16 @@ function checkCollisions(){
   // Force matrix update even on invisible objects
   machineGroup.visible=true;
   scene.updateMatrixWorld(true);
+
+  // DEBUG — log first proxy world pts
+  if(collProxies.length>=2){
+    const wA=getProxyWorldPts(collProxies[0]);
+    const wB=getProxyWorldPts(collProxies[1]);
+    console.log('Proxy A part:', collProxies[0].part, 'pts:', wA?wA.length:null, wA?wA[0]:null);
+    console.log('Proxy B part:', collProxies[1].part, 'pts:', wB?wB.length:null, wB?wB[0]:null);
+    console.log('shouldCheck:', shouldCheck(collProxies[0].part, collProxies[1].part));
+    if(wA&&wB) console.log('gjkOverlap result:', gjkOverlap(wA,wB));
+  }
   const violations=[];
   for(const proxy of collProxies) setProxyColliding(proxy.id,false);
   const proxiesByPart={};
@@ -2526,7 +2536,7 @@ function updateMachineFromMove(m){
   machineGroup.position.set(ox,oz,-oy);
   if(mGrp.Z) mGrp.Z.position.set(0,-m.mz,0);
   if(mGrp.B){mGrp.B.rotation.set(0,0,0);mGrp.B.rotateZ(-m.mb*Math.PI/180);}
-  if(mGrp.C){mGrp.C.rotation.set(0,0,0);mGrp.C.rotateY(-m.mc*Math.PI/180);}
+  if(mGrp.C){mGrp.C.rotation.set(0,0,0);mGrp.C.rotateY(m.mc*Math.PI/180);}
   if(mGrp.Y) mGrp.Y.position.set(0,0,-m.my);
   if(mGrp.X) mGrp.X.position.set(m.mx,0,0);
 }
