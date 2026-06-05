@@ -850,17 +850,18 @@ function updateNozzlePosition(moveIdx){
 
   if(usePart){
     const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
-    nozzleMesh.position.set(wx,wz,-wy);
+    nozzleMesh.position.set(wx,-wz,-wy);
     nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
   } else {
-    nozzleMesh.position.set(m.mx, m.mz, -m.my);
+    nozzleMesh.position.set(m.mx, -m.mz, -m.my);
     nozzleMesh.quaternion.set(0,0,0,1);
   }
 }
 
 function initStaticScene(){
-  rootGroup.add(staticGroup); // nozzle — no bed rotation ever
-  rootGroup.add(bedGroup);    // buildplate + toolpath meshes
+  rootGroup.add(staticGroup);
+  rootGroup.add(bedGroup);
+  bedGroup.scale.set(1,-1,1); // flip Y to match machine Z-down convention
   buildBuildplate();
   buildNozzle();
 }
@@ -1093,9 +1094,7 @@ function parseGcode(text){
 
 function toPart(x,y,z,bDeg,cDeg){
   const b=bDeg*Math.PI/180, c=cDeg*Math.PI/180;
-  // Machine Z increases downward (bed moves down), so negate Z before transform
-  const zn=-z;
-  const xb=x*Math.cos(-b)+zn*Math.sin(-b), yb=y, zb=-x*Math.sin(-b)+zn*Math.cos(-b);
+  const xb=x*Math.cos(-b)+z*Math.sin(-b), yb=y, zb=-x*Math.sin(-b)+z*Math.cos(-b);
   return [xb*Math.cos(-c)-yb*Math.sin(-c), xb*Math.sin(-c)+yb*Math.cos(-c), zb];
 }
 
@@ -1144,7 +1143,7 @@ function buildMeshes(nd){
     const colors=colorByLayer?new Float32Array(segs.length*3):null;
     for(let i=0;i<segs.length;i++){
       const [x0,y0,z0]=segs[i].s0,[x1,y1,z1]=segs[i].s1;
-      const v0=new THREE.Vector3(x0,z0,-y0),v1=new THREE.Vector3(x1,z1,-y1);
+      const v0=new THREE.Vector3(x0,-z0,-y0),v1=new THREE.Vector3(x1,-z1,-y1);
       const len=v0.distanceTo(v1);
       if(len<0.001){mesh.setMatrixAt(i,new THREE.Matrix4());continue;}
       dummy.position.copy(v0).lerp(v1,0.5);
@@ -1165,8 +1164,8 @@ function buildMeshes(nd){
   if(showT&&segsT.length){
     const pts=[];
     for(const s of segsT){
-      pts.push(new THREE.Vector3(s.s0[0],s.s0[2],-s.s0[1]));
-      pts.push(new THREE.Vector3(s.s1[0],s.s1[2],-s.s1[1]));
+      pts.push(new THREE.Vector3(s.s0[0],-s.s0[2],-s.s0[1]));
+      pts.push(new THREE.Vector3(s.s1[0],-s.s1[2],-s.s1[1]));
     }
     const geo=new THREE.BufferGeometry().setFromPoints(pts);
     lineT=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0xf59e0b,transparent:true,opacity:0.4}));
