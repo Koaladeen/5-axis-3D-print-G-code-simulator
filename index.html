@@ -273,6 +273,9 @@
     <div class="h-sep"></div>
     <button class="h-btn primary" id="loadBtn">↑ Load G-code</button>
     <input type="file" id="fi" accept=".gcode,.nc,.txt" style="display:none">
+    <select id="exampleSelect" class="h-select">
+      <option value="">⬇ Examples…</option>
+    </select>
     <span id="fname">no file loaded</span>
     <span id="status"></span>
     <div class="spacer"></div>
@@ -1044,6 +1047,49 @@ document.getElementById('prog').addEventListener('input',e=>applyProgress(parseI
 
 initThree();
 initStaticSceneLate();
+
+// ── Example files from GitHub ─────────────────────────────────────
+const REPO_API = 'https://api.github.com/repos/Koaladeen/5-axis-3D-print-G-code-simulator/contents/Example%20G-Codes';
+const REPO_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-print-G-code-simulator/main/Example%20G-Codes';
+
+(async()=>{
+  try{
+    const res = await fetch(REPO_API);
+    if(!res.ok) throw new Error('GitHub API '+res.status);
+    const files = await res.json();
+    const sel = document.getElementById('exampleSelect');
+    files
+      .filter(f=>f.type==='file' && /\.(gcode|nc|txt|g)$/i.test(f.name))
+      .forEach(f=>{
+        const opt=document.createElement('option');
+        opt.value=f.name;
+        opt.textContent=f.name;
+        sel.appendChild(opt);
+      });
+  }catch(e){
+    const opt=document.createElement('option');
+    opt.value=''; opt.textContent='Failed to load list';
+    document.getElementById('exampleSelect').appendChild(opt);
+    console.warn('Example fetch error:',e);
+  }
+})();
+
+document.getElementById('exampleSelect').addEventListener('change', async function(){
+  const name=this.value; if(!name) return;
+  document.getElementById('status').textContent='fetching…';
+  document.getElementById('fname').textContent=name;
+  try{
+    const res = await fetch(`${REPO_RAW}/${encodeURIComponent(name)}`);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const text = await res.text();
+    cachedText=text;
+    rebuildAll(true);
+  }catch(e){
+    document.getElementById('status').textContent='fetch failed';
+    console.error(e);
+  }
+  this.value=''; // reset dropdown
+});
 </script>
 </body>
 </html>
