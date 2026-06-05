@@ -409,6 +409,7 @@
       <div id="coll-list"></div>
       <div id="coll-footer">
         <button class="h-btn" id="coll-add-btn">+ Add proxy</button>
+        <button class="h-btn" id="coll-auto-btn" style="border-color:rgba(34,197,94,0.4);color:#22c55e;">⟳ Auto-generate hulls</button>
         <button class="h-btn" id="coll-export-btn">↓ Export JSON</button>
         <button class="h-btn" id="coll-import-btn">↑ Import JSON</button>
         <input type="file" id="coll-import-file" accept=".json" style="display:none">
@@ -696,6 +697,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/math/ConvexHull.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/ConvexGeometry.js"></script>
 <script>
 // ── Three.js ──────────────────────────────────────────────────────
 const cv = document.getElementById('cv');
@@ -1056,8 +1059,13 @@ async function loadMachine(machineName){
       collProxies=(data.proxies||[]).map(p=>({...p,id:nextProxyId++}));
       rebuildProxyWireframes();
       document.getElementById('coll-status').textContent=`Auto-loaded ${collProxies.length} proxies from collision.json`;
+    } else {
+      // No collision.json — auto-generate hulls
+      setTimeout(()=>autoGenerateHulls(), 200);
     }
-  }catch(e){}
+  }catch(e){
+    setTimeout(()=>autoGenerateHulls(), 200);
+  }
   updateMachine(0);
 }
 
@@ -1587,22 +1595,87 @@ function shouldCheck(a,b){
   return !SKIP_PAIRS.has(k1)&&!SKIP_PAIRS.has(k2);
 }
 
-// Solid transparent proxy mesh
+// Solid transparent proxy mesh — supports box, cylinder, sphere, hull
 function makeProxyMesh(proxy, colliding=false){
   let geo;
-  if(proxy.type==='sphere')      geo=new THREE.SphereGeometry(proxy.sx,16,10);
-  else if(proxy.type==='cylinder') geo=new THREE.CylinderGeometry(proxy.sx,proxy.sx,proxy.sy,16,1);
-  else                             geo=new THREE.BoxGeometry(proxy.sx,proxy.sy,proxy.sz);
+  if(proxy.type==='hull' && proxy.hullPoints){
+    try{
+      const pts = proxy.hullPoints.map(p=>new THREE.Vector3(p[0],p[1],p[2]));
+      geo = new THREE.ConvexGeometry(pts);
+    } catch(e){ geo = new THREE.SphereGeometry(10,8,6); } // fallback
+  } else if(proxy.type==='sphere'){
+    geo=new THREE.SphereGeometry(proxy.sx,16,10);
+  } else if(proxy.type==='cylinder'){
+    geo=new THREE.CylinderGeometry(proxy.sx,proxy.sx,proxy.sy,16,1);
+  } else {
+    geo=new THREE.BoxGeometry(proxy.sx,proxy.sy,proxy.sz);
+  }
   const col = colliding ? 0xff2222 : 0xff4444;
-  const mat = new THREE.MeshLambertMaterial({color:col, transparent:true, opacity:0.28, side:THREE.DoubleSide, depthWrite:false});
-  // Wireframe overlay
-  const wireMat = new THREE.LineBasicMaterial({color:colliding?0xff0000:0xff6666, transparent:true, opacity:0.7});
+  const mat = new THREE.MeshLambertMaterial({color:col, transparent:true, opacity:0.22, side:THREE.DoubleSide, depthWrite:false});
+  const wireMat = new THREE.LineBasicMaterial({color:colliding?0xff0000:0xff6666, transparent:true, opacity:0.5});
   const wireGeo = new THREE.WireframeGeometry(geo);
   const grp = new THREE.Group();
   grp.add(new THREE.Mesh(geo,mat));
   grp.add(new THREE.LineSegments(wireGeo,wireMat));
-  grp.position.set(proxy.ox,proxy.oy,proxy.oz);
+  grp.position.set(proxy.ox||0, proxy.oy||0, proxy.oz||0);
   return grp;
+}
+
+// Sample vertices from an STL mesh, decimated to maxPts for hull computation
+function sampleMeshVertices(mesh3d, maxPts=200){
+  const pos = mesh3d.geometry.attributes.position;
+  if(!pos) return [];
+  const total = pos.count;
+  const step = Math.max(1, Math.floor(total/maxPts));
+  const pts = [];
+  for(let i=0;i<total;i+=step){
+    pts.push([pos.getX(i), pos.getY(i), pos.getZ(i)]);
+  }
+  return pts;
+}
+
+// Auto-generate convex hull proxies for all loaded machine parts
+function autoGenerateHulls(){
+  if(!machineLoaded){ document.getElementById('coll-status').textContent='Load a machine first'; return; }
+  document.getElementById('coll-status').textContent='Generating hulls…';
+
+  // Clear existing hull proxies (keep manual ones)
+  collProxies = collProxies.filter(p=>p.type!=='hull');
+
+  let count=0;
+  for(const partName of MACHINE_PARTS){
+    const grp = mGrp[partName]; if(!grp) continue;
+    // Collect all mesh vertices in part-local space
+    const allPts=[];
+    grp.traverse(c=>{
+      if(!c.isMesh || c.userData.isProxyMesh) return;
+      // Transform vertices into part group's local space
+      const pos=c.geometry.attributes.position; if(!pos) return;
+      const total=pos.count;
+      const step=Math.max(1,Math.floor(total/300));
+      const localMat = new THREE.Matrix4().copy(grp.matrixWorld).invert().multiply(c.matrixWorld);
+      const v=new THREE.Vector3();
+      for(let i=0;i<total;i+=step){
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i));
+        v.applyMatrix4(localMat);
+        allPts.push([v.x,v.y,v.z]);
+      }
+    });
+    if(allPts.length<4) continue;
+
+    collProxies.push({
+      id:nextProxyId++,
+      part:partName,
+      type:'hull',
+      hullPoints:allPts,
+      sx:0,sy:0,sz:0,ox:0,oy:0,oz:0
+    });
+    count++;
+  }
+
+  rebuildProxyWireframes();
+  renderProxyList();
+  document.getElementById('coll-status').textContent=`Generated ${count} convex hull proxies`;
 }
 
 function rebuildProxyWireframes(){
@@ -1718,17 +1791,31 @@ function setProxyWireframesVisible(v){
   Object.values(proxyMeshes).forEach(m=>m.visible=v);
 }
 
-// Get world-space OBB for a proxy given its current transform
 function getProxyOBB(proxy){
   const grp = mGrp[proxy.part];
   if(!grp) return null;
-  // World position of proxy center
+
+  if(proxy.type==='hull' && proxy.hullPoints){
+    // For hull: compute world-space bounding box of all hull points
+    // Fast approximate check — transform each point by part's world matrix
+    const mat = grp.matrixWorld;
+    const v = new THREE.Vector3();
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    for(const p of proxy.hullPoints){
+      v.set(p[0],p[1],p[2]).applyMatrix4(mat);
+      if(v.x<minX)minX=v.x; if(v.x>maxX)maxX=v.x;
+      if(v.y<minY)minY=v.y; if(v.y>maxY)maxY=v.y;
+      if(v.z<minZ)minZ=v.z; if(v.z>maxZ)maxZ=v.z;
+    }
+    const center=new THREE.Vector3((minX+maxX)/2,(minY+maxY)/2,(minZ+maxZ)/2);
+    const quat=new THREE.Quaternion(); // world-aligned
+    return {center, quat, hx:(maxX-minX)/2, hy:(maxY-minY)/2, hz:(maxZ-minZ)/2, type:'box', r:0, hullPoints:proxy.hullPoints, partMat:mat};
+  }
+
   const local = new THREE.Vector3(proxy.ox, proxy.oy, proxy.oz);
   const world = local.clone().applyMatrix4(grp.matrixWorld);
-  // World rotation
   const quat = new THREE.Quaternion();
   grp.getWorldQuaternion(quat);
-  // Half-extents in local space
   let hx, hy, hz;
   if(proxy.type==='sphere'){ hx=hy=hz=proxy.sx; }
   else if(proxy.type==='cylinder'){ hx=hz=proxy.sx; hy=proxy.sy/2; }
@@ -1832,6 +1919,7 @@ function renderProxyList(){
         <option value="box" ${proxy.type==='box'?'selected':''}>Box</option>
         <option value="cylinder" ${proxy.type==='cylinder'?'selected':''}>Cyl</option>
         <option value="sphere" ${proxy.type==='sphere'?'selected':''}>Sphere</option>
+        <option value="hull" ${proxy.type==='hull'?'selected':''}>Hull ✓</option>
       </select>
       <input class="cp-sx" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="Width/Radius">
       <input class="cp-sy" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="Height (box/cyl)">
@@ -1904,6 +1992,9 @@ document.getElementById('coll-add-btn').addEventListener('click',()=>{
   rebuildProxyWireframes();
 });
 
+document.getElementById('coll-auto-btn').addEventListener('click',()=>{
+  autoGenerateHulls();
+});
 document.getElementById('coll-check-btn').addEventListener('click',()=>checkCollisions());
 
 document.getElementById('coll-export-btn').addEventListener('click',()=>{
