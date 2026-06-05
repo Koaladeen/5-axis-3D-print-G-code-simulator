@@ -1606,13 +1606,12 @@ function checkLimits(){
 
   const bar=document.getElementById('violations-bar');
   const list=document.getElementById('violations-list');
-  if(violations.length){
-    list.innerHTML=violations.join('');
-    bar.style.display='block';
-  } else {
-    bar.style.display='none';
-    list.innerHTML='';
-  }
+  // Clear previous axis violations but preserve collision div
+  const collDiv=document.getElementById('coll-violations');
+  list.innerHTML=violations.join('');
+  if(collDiv && !list.contains(collDiv)) list.appendChild(collDiv);
+  const hasContent = violations.length || (collDiv && collDiv.innerHTML.trim());
+  bar.style.display = hasContent ? 'block' : 'none';
 }
 document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('fi').click());
 document.getElementById('fi').addEventListener('change',ev=>{
@@ -2207,15 +2206,14 @@ function checkCollisions(){
   machineGroup.visible=true;
   scene.updateMatrixWorld(true);
 
-  // DEBUG — log first proxy world pts
-  if(collProxies.length>=2){
+  // Debug info shown in report panel
+  let debugInfo = `${collProxies.length} proxies, ${Object.keys(partGroups).filter(k=>partGroups[k]>0).length} active parts`;
+  if(collProxies.length>=1){
     const wA=getProxyWorldPts(collProxies[0]);
-    const wB=getProxyWorldPts(collProxies[1]);
-    console.log('Proxy A part:', collProxies[0].part, 'pts:', wA?wA.length:null, wA?wA[0]:null);
-    console.log('Proxy B part:', collProxies[1].part, 'pts:', wB?wB.length:null, wB?wB[0]:null);
-    console.log('shouldCheck:', shouldCheck(collProxies[0].part, collProxies[1].part));
-    if(wA&&wB) console.log('gjkOverlap result:', gjkOverlap(wA,wB));
+    debugInfo += ` | proxy[0] ${collProxies[0].part}(G${partGroups[collProxies[0].part]??1}): ${wA?wA.length+' pts':'null'}`;
+    if(wA) debugInfo += ` first=[${wA[0].map(v=>v.toFixed(1)).join(',')}]`;
   }
+  if(report) report.innerHTML=`<span style="color:var(--text2);font-size:9px;">${debugInfo}</span>`;
   const violations=[];
   for(const proxy of collProxies) setProxyColliding(proxy.id,false);
   const proxiesByPart={};
