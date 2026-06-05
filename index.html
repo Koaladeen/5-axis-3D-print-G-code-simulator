@@ -930,7 +930,7 @@ async function loadMachine(machineName){
   mGrp.X = new THREE.Group(); mGrp.Y.add(mGrp.X);
 
   if(!machineGroup.parent) rootGroup.add(machineGroup);
-  machineGroup.rotation.set(Math.PI, 0, 0); // flip 180° around X = flips Z up/down
+  machineGroup.rotation.set(0, 0, 0);
   machineGroup.visible=true;
 
   const loader = new THREE.STLLoader();
