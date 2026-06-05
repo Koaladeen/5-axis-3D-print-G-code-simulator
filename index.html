@@ -2283,6 +2283,7 @@ function checkCollisions(){
     }
   }
   if(report) report.innerHTML=debugLines.map(l=>`<div style="font-size:9px">${l}</div>`).join('');
+  document.getElementById('coll-status').textContent = debugLines.join(' | ');
   const violations=[];
   for(const proxy of collProxies) setProxyColliding(proxy.id,false);
   const proxiesByPart={};
