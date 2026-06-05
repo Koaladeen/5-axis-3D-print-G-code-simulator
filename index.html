@@ -850,10 +850,10 @@ function updateNozzlePosition(moveIdx){
 
   if(usePart){
     const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
-    nozzleMesh.position.set(wx,-wz,-wy);
+    nozzleMesh.position.set(wx,wz,-wy);
     nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
   } else {
-    nozzleMesh.position.set(m.mx, -m.mz, -m.my);
+    nozzleMesh.position.set(m.mx, m.mz, -m.my);
     nozzleMesh.quaternion.set(0,0,0,1);
   }
 }
@@ -861,7 +861,6 @@ function updateNozzlePosition(moveIdx){
 function initStaticScene(){
   rootGroup.add(staticGroup);
   rootGroup.add(bedGroup);
-  bedGroup.scale.set(1,-1,1); // flip Y to match machine Z-down convention
   buildBuildplate();
   buildNozzle();
 }
@@ -931,6 +930,7 @@ async function loadMachine(machineName){
   mGrp.X = new THREE.Group(); mGrp.Y.add(mGrp.X);
 
   if(!machineGroup.parent) rootGroup.add(machineGroup);
+  machineGroup.rotation.set(0, 0, Math.PI); // flip 180° around Z to match coordinate convention
   machineGroup.visible=true;
 
   const loader = new THREE.STLLoader();
@@ -978,7 +978,7 @@ function updateMachine(moveIdx){
   machineGroup.position.set(ox, oz, -oy); // apply in Three.js coords
 
   // Bed side: Z↑, B rotates Y, C IS the bed (rotates on B-local Y)
-  if(mGrp.Z) mGrp.Z.position.set(0, -mz, 0);
+  if(mGrp.Z) mGrp.Z.position.set(0, mz, 0);
   if(mGrp.B){ mGrp.B.rotation.set(0,0,0); mGrp.B.rotateZ(-mb*Math.PI/180); }
   if(mGrp.C){ mGrp.C.rotation.set(0,0,0); mGrp.C.rotateY(-mc*Math.PI/180); }
 
@@ -1143,7 +1143,7 @@ function buildMeshes(nd){
     const colors=colorByLayer?new Float32Array(segs.length*3):null;
     for(let i=0;i<segs.length;i++){
       const [x0,y0,z0]=segs[i].s0,[x1,y1,z1]=segs[i].s1;
-      const v0=new THREE.Vector3(x0,-z0,-y0),v1=new THREE.Vector3(x1,-z1,-y1);
+      const v0=new THREE.Vector3(x0,z0,-y0),v1=new THREE.Vector3(x1,z1,-y1);
       const len=v0.distanceTo(v1);
       if(len<0.001){mesh.setMatrixAt(i,new THREE.Matrix4());continue;}
       dummy.position.copy(v0).lerp(v1,0.5);
@@ -1164,8 +1164,8 @@ function buildMeshes(nd){
   if(showT&&segsT.length){
     const pts=[];
     for(const s of segsT){
-      pts.push(new THREE.Vector3(s.s0[0],-s.s0[2],-s.s0[1]));
-      pts.push(new THREE.Vector3(s.s1[0],-s.s1[2],-s.s1[1]));
+      pts.push(new THREE.Vector3(s.s0[0],s.s0[2],-s.s0[1]));
+      pts.push(new THREE.Vector3(s.s1[0],s.s1[2],-s.s1[1]));
     }
     const geo=new THREE.BufferGeometry().setFromPoints(pts);
     lineT=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0xf59e0b,transparent:true,opacity:0.4}));
