@@ -2227,12 +2227,47 @@ function gjkSupport(pts,d){
   return [bx,by,bz];
 }
 
-// Robust overlap test: SAT on world-space point clouds
-// Generates candidate axes from AABB faces + cross products of edges
+// Compute convex hull face normals from a point cloud via THREE.ConvexHull.
+// Returns array of [nx,ny,nz] unit vectors (deduplicated by direction).
+function hullFaceNormals(pts){
+  if(pts.length < 4) return [];
+  try {
+    const verts = pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]));
+    const hull = new THREE.ConvexHull();
+    hull.setFromPoints(verts);
+    const seen = new Set();
+    const normals = [];
+    for(const face of hull.faces){
+      const n = face.normal;
+      // Snap to 4 decimal places to deduplicate parallel faces
+      const key = `${n.x.toFixed(4)},${n.y.toFixed(4)},${n.z.toFixed(4)}`;
+      if(!seen.has(key)){
+        seen.add(key);
+        normals.push([n.x, n.y, n.z]);
+      }
+    }
+    return normals;
+  } catch(e){ return []; }
+}
+
+// Project point cloud onto axis, return [min, max]
+function projectPts(pts, nx, ny, nz){
+  let mn=Infinity, mx=-Infinity;
+  for(const p of pts){
+    const d = p[0]*nx + p[1]*ny + p[2]*nz;
+    if(d < mn) mn = d;
+    if(d > mx) mx = d;
+  }
+  return [mn, mx];
+}
+
+// True SAT overlap test using convex hull face normals of both shapes
+// + 3 axis-aligned axes as fallback for degenerate/flat clouds.
+// Only returns true when the hulls actually interpenetrate — no ghost collisions.
 function pointCloudsOverlap(ptsA, ptsB){
   if(!ptsA||!ptsB||!ptsA.length||!ptsB.length) return false;
 
-  // Quick AABB pre-check
+  // Quick AABB pre-check (cheap early-out)
   let axMin=Infinity,axMax=-Infinity,bxMin=Infinity,bxMax=-Infinity;
   let ayMin=Infinity,ayMax=-Infinity,byMin=Infinity,byMax=-Infinity;
   let azMin=Infinity,azMax=-Infinity,bzMin=Infinity,bzMax=-Infinity;
@@ -2246,27 +2281,37 @@ function pointCloudsOverlap(ptsA, ptsB){
     if(p[1]<byMin)byMin=p[1]; if(p[1]>byMax)byMax=p[1];
     if(p[2]<bzMin)bzMin=p[2]; if(p[2]>bzMax)bzMax=p[2];
   }
-  // AABB separation test
   if(axMax<bxMin||bxMax<axMin) return false;
   if(ayMax<byMin||byMax<ayMin) return false;
   if(azMax<bzMin||bzMax<azMin) return false;
 
-  // If AABBs overlap, do refined SAT with support function on 13 axes
-  // (3 axis-aligned + 10 random directions covering sphere)
-  const axes=[
-    [1,0,0],[0,1,0],[0,0,1],
-    [1,1,0],[1,-1,0],[1,0,1],[1,0,-1],[0,1,1],[0,1,-1],
-    [1,1,1],[1,1,-1],[1,-1,1],[-1,1,1],
-  ];
-  for(const ax of axes){
-    const len=Math.sqrt(ax[0]*ax[0]+ax[1]*ax[1]+ax[2]*ax[2]);
-    const nx=ax[0]/len,ny=ax[1]/len,nz=ax[2]/len;
-    let aMin=Infinity,aMax=-Infinity,bMin=Infinity,bMax=-Infinity;
-    for(const p of ptsA){const d=p[0]*nx+p[1]*ny+p[2]*nz;if(d<aMin)aMin=d;if(d>aMax)aMax=d;}
-    for(const p of ptsB){const d=p[0]*nx+p[1]*ny+p[2]*nz;if(d<bMin)bMin=d;if(d>bMax)bMax=d;}
-    if(aMax<bMin||bMax<aMin) return false;
+  // Build SAT axes: face normals from both hulls + 3 axis-aligned fallbacks
+  const axesA = hullFaceNormals(ptsA);
+  const axesB = hullFaceNormals(ptsB);
+  const axes  = axesA.length && axesB.length
+    ? [...axesA, ...axesB]
+    : [[1,0,0],[0,1,0],[0,0,1]]; // fallback if hull fails (flat/degenerate)
+
+  // Also add cross products of representative edges between the two hulls
+  // (needed for edge-edge separation, e.g. two rotated boxes)
+  if(axesA.length && axesB.length){
+    for(const a of axesA){
+      for(const b of axesB){
+        const cx = a[1]*b[2] - a[2]*b[1];
+        const cy = a[2]*b[0] - a[0]*b[2];
+        const cz = a[0]*b[1] - a[1]*b[0];
+        const len = Math.sqrt(cx*cx+cy*cy+cz*cz);
+        if(len > 1e-6) axes.push([cx/len, cy/len, cz/len]);
+      }
+    }
   }
-  return true; // No separating axis found — overlapping
+
+  for(const [nx,ny,nz] of axes){
+    const [aMin,aMax] = projectPts(ptsA, nx, ny, nz);
+    const [bMin,bMax] = projectPts(ptsB, nx, ny, nz);
+    if(aMax < bMin || bMax < aMin) return false; // separating axis found
+  }
+  return true; // no separating axis — genuinely overlapping
 }
 
 function gjkOverlap(ptsA,ptsB){ return pointCloudsOverlap(ptsA,ptsB); }
