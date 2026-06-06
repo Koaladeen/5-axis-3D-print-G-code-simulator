@@ -2140,19 +2140,10 @@ function sampleInstancedMeshPts(mesh, maxCount, maxSamples){
 
 function buildPrintHull(moveIdx){
   if(!mesh3 && !mesh5) return null;
-  // Sample with bedGroup at identity so hull is in neutral scene-space.
-  // We save/restore bedGroup's transform around the sample.
-  const savedQ = bedGroup.quaternion.clone();
-  const savedP = bedGroup.position.clone();
-  bedGroup.quaternion.set(0, 0, 0, 1);
-  bedGroup.position.set(0, 0, 0);
   scene.updateMatrixWorld(true);
   const pts = [];
   if(mesh3 && cum3[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh3, cum3[moveIdx], 200));
   if(mesh5 && cum5[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh5, cum5[moveIdx], 200));
-  bedGroup.quaternion.copy(savedQ);
-  bedGroup.position.copy(savedP);
-  scene.updateMatrixWorld(true);
   if(pts.length < 4) return null;
   // Reduce to hull vertices to keep SAT fast
   try{
@@ -2173,15 +2164,23 @@ function buildPrintHull(moveIdx){
   } catch(ex){ return pts; }
 }
 
+function bedPoseKey(){
+  // A cheap string key representing bedGroup's current world pose.
+  const q = bedGroup.quaternion, p = bedGroup.position;
+  return `${q.x.toFixed(4)},${q.y.toFixed(4)},${q.z.toFixed(4)},${q.w.toFixed(4)},${p.y.toFixed(3)}`;
+}
+let printHullPoseKey = '';
+
 function getPrintHullPts(moveIdx){
-  // While jogging, bedGroup is at jog pose — never rebuild, use the hull
-  // cached at pause time (which was built with bedGroup at identity).
-  if(isJogging) return printHullPts;
-  // During playback, throttle rebuilds. When scrubbing (paused, not jogging), rebuild freely.
-  const stale = printHullPts === null || Math.abs(moveIdx - printHullIdx) >= (isPlaying ? PRINT_HULL_THROTTLE : 1);
+  const curPoseKey = bedPoseKey();
+  const poseChanged = curPoseKey !== printHullPoseKey;
+  const stale = printHullPts === null
+    || poseChanged
+    || Math.abs(moveIdx - printHullIdx) >= (isPlaying ? PRINT_HULL_THROTTLE : 1);
   if(stale){
     printHullPts = buildPrintHull(moveIdx);
     printHullIdx = moveIdx;
+    printHullPoseKey = curPoseKey;
   }
   return printHullPts;
 }
@@ -2189,6 +2188,7 @@ function getPrintHullPts(moveIdx){
 function clearPrintHull(){
   printHullPts = null;
   printHullIdx = -1;
+  printHullPoseKey = '';
 }
 
 // ── Per-move check called every playback step ────────────────────
@@ -3614,9 +3614,7 @@ function applyJogPosition(){
   // reads the correct moveIdx (prog bar position) against the actual
   // printed geometry, while the machine is posed at the jog position.
   scene.updateMatrixWorld(true);
-  isJogging = true;
   checkCurrentMove(); // includes print hull vs machine check
-  isJogging = false;
   if(saved !== undefined) allMoves[0] = saved;
 }
 
