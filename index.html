@@ -1804,7 +1804,10 @@ function buildPrintHull(moveIdx){
 }
 
 function getPrintHullPts(moveIdx){
-  if(Math.abs(moveIdx - printHullIdx) >= PRINT_HULL_THROTTLE || printHullPts === null){
+  // Always rebuild when not playing (scrubbing/jogging) so manual proxy tweaks are reflected instantly.
+  // During playback, throttle to every N moves to keep perf manageable.
+  const stale = printHullPts === null || Math.abs(moveIdx - printHullIdx) >= (isPlaying ? PRINT_HULL_THROTTLE : 1);
+  if(stale){
     printHullPts = buildPrintHull(moveIdx);
     printHullIdx = moveIdx;
   }
@@ -1844,6 +1847,8 @@ function checkCurrentMove(){
   // Collision check for current machine pose
   let collViolations = [];
   clearAllPartColliding(); // reset tints each frame
+  // ── Proxy vs proxy collision (machine parts) ────────────────────
+  const collidingParts = new Set();
   if(collisionEnabled && collProxies.length && machineLoaded){
     machineGroup.visible = true;
     scene.updateMatrixWorld(true);
@@ -1853,7 +1858,6 @@ function checkCurrentMove(){
       proxiesByPart[p.part].push(p);
     }
     const parts = Object.keys(proxiesByPart);
-    const collidingParts = new Set();
     for(let i=0; i<parts.length; i++){
       for(let j=i+1; j<parts.length; j++){
         if(!shouldCheck(parts[i], parts[j])) continue;
@@ -1873,32 +1877,31 @@ function checkCurrentMove(){
         }
       }
     }
-    // Tint colliding machine parts red; restore cleared ones
     for(const part of Object.keys(partCollidingState)) setPartColliding(part, collidingParts.has(part));
     for(const part of collidingParts) setPartColliding(part, true);
     machineGroup.visible = document.getElementById('showMach').checked;
+  }
 
-    // ── Print mesh vs machine (experimental) ──────────────────────
-    const printEnabled = document.getElementById('coll-print-enabled')?.checked ?? false;
-    if(printEnabled && collProxies.length && (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)){
-      scene.updateMatrixWorld(true);
-      const hullPts = getPrintHullPts(moveIdx);
-      if(hullPts && hullPts.length >= 4){
-        for(const p of collProxies){
-          if(!shouldCheck(PRINT_PART, p.part)) continue;
-          const wB = getProxyWorldPts(p);
-          if(!wB || !wB.length) continue;
-          if(pointCloudsOverlap(hullPts, wB)){
-            const key = 'PrintMesh ↔ ' + p.part;
-            if(!collViolations.includes(key)) collViolations.push(key);
-            setPartColliding(p.part, true);
-          }
+  // ── Print mesh vs machine (experimental) — runs independently ───
+  const printEnabled = document.getElementById('coll-print-enabled')?.checked ?? false;
+  if(collisionEnabled && printEnabled && collProxies.length && (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)){
+    scene.updateMatrixWorld(true);
+    const hullPts = getPrintHullPts(moveIdx);
+    if(hullPts && hullPts.length >= 4){
+      for(const p of collProxies){
+        if(!shouldCheck(PRINT_PART, p.part)) continue;
+        const wB = getProxyWorldPts(p);
+        if(!wB || !wB.length) continue;
+        if(pointCloudsOverlap(hullPts, wB)){
+          const key = 'PrintMesh ↔ ' + p.part;
+          if(!collViolations.includes(key)) collViolations.push(key);
+          setPartColliding(p.part, true);
         }
-        // Clear parts that are no longer hit by print hull
-        for(const part of Object.keys(partCollidingState)){
-          if(!collidingParts.has(part) && !collViolations.some(k=>k.includes('↔ '+part))){
-            setPartColliding(part, false);
-          }
+      }
+      // Restore parts no longer hit by print hull
+      for(const part of Object.keys(partCollidingState)){
+        if(!collidingParts.has(part) && !collViolations.some(k=>k.includes('↔ '+part))){
+          setPartColliding(part, false);
         }
       }
     }
