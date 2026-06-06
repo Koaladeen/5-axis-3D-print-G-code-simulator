@@ -2247,12 +2247,17 @@ function checkCurrentMove(){
 
   // ── Print mesh vs machine (experimental) — runs independently ───
   const printEnabled = document.getElementById('coll-print-enabled')?.checked ?? false;
-  if(collisionEnabled && printEnabled && collProxies.length && (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)){
+  // During jog the prog bar may be at 0 with no G-code, so use the last move index
+  // which covers all extrusion laid down so far.
+  const printMoveIdx = (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)
+    ? moveIdx
+    : Math.max(0, allMoves.length - 1);
+  if(collisionEnabled && printEnabled && collProxies.length && (cum3[printMoveIdx] > 0 || cum5[printMoveIdx] > 0)){
     // Must sync rootGroup's orbit transform into matrixWorld before reading any world positions
     rootGroup.rotation.x = rotX; rootGroup.rotation.y = rotY;
     rootGroup.position.x = panX; rootGroup.position.y = panY;
     rootGroup.updateWorldMatrix(true, true);
-    const hullPts = getPrintHullPts(moveIdx);
+    const hullPts = getPrintHullPts(printMoveIdx);
     if(hullPts && hullPts.length >= 4){
       for(const p of collProxies){
         if(!shouldCheck(PRINT_PART, p.part)) continue;
@@ -3583,10 +3588,13 @@ function applyJogPosition(){
   updateNozzlePositionFromMove(fakeMove);
   updateBedRotationFromMove(fakeMove);
   updateMachineFromMove(fakeMove);
-  if(saved !== undefined) allMoves[0] = saved;
-  // Force Three.js to recalculate world matrices before collision check
+  // Force Three.js to recalculate world matrices before collision check.
+  // NOTE: restore allMoves[0] AFTER checkCurrentMove so buildPrintHull
+  // reads the correct moveIdx (prog bar position) against the actual
+  // printed geometry, while the machine is posed at the jog position.
   scene.updateMatrixWorld(true);
   checkCurrentMove(); // includes print hull vs machine check
+  if(saved !== undefined) allMoves[0] = saved;
 }
 
 // Jog-aware versions that take a move directly
