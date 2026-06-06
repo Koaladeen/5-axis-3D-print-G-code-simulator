@@ -384,29 +384,34 @@
   #coll-overlay {
     position: fixed;
     top: 36px; left: 196px; bottom: 0;
-    width: 420px;
+    width: 400px; max-width: 400px;
+    overflow: hidden;
     background: var(--ui-bg0);
     border-right: 2px solid var(--accent);
     box-shadow: 4px 0 24px rgba(0,0,0,0.25);
     z-index: 200;
     pointer-events: none;
     display: flex; flex-direction: column;
-    transform: translateX(-100%);
+    transform: translateX(calc(-100% - 196px));
     transition: transform 0.22s cubic-bezier(0.32,0.72,0,1);
     visibility: hidden;
   }
   #coll-overlay.open { transform: translateX(0); pointer-events: all; visibility: visible; }
   #coll-modal {
     display: flex; flex-direction: column;
-    flex: 1; min-height: 0;
+    flex: 1; min-height: 0; min-width: 0;
     pointer-events: all;
     position: static;
-    width: 100%; max-height: none;
+    width: 400px; max-width: 400px; max-height: none;
     border: none; box-shadow: none;
     border-top: none;
+    overflow: hidden;
   }
   #coll-modal .modal-head { cursor: default; }
-  #coll-list { overflow-y: auto; flex: 1; min-height: 0; }
+  #coll-list { overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
+  /* Constrain the proxy grid columns so they don't blow out the panel */
+  .coll-header-row,
+  .coll-proxy { grid-template-columns: 70px 40px 58px 52px 52px 52px 80px 24px !important; }
   .modal-box {
     background: var(--ui-bg0); border: 1px solid var(--border-hi);
     border-top: 3px solid var(--accent);
