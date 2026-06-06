@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 <meta name="screen-orientation" content="landscape">
 <title>5-Axis G-code Simulator</title>
+<meta name="app-version" content="1.0.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -233,15 +234,92 @@
   .pb-spd-label { font-family: var(--mono); font-size: 10px; color: var(--text2); }
   .pb-spd-val   { font-family: var(--mono); font-size: 10px; color: var(--text1); min-width: 32px; text-align: right; }
 
-  /* Violations */
-  #violations-bar {
-    display: none; background: #fdecea;
-    border-top: 1px solid #e0a0a0; padding: 6px 14px; max-height: 90px; overflow-y: auto;
+  /* ── Collision report panel (right sidebar bottom) ── */
+  #coll-report-panel {
+    flex-shrink: 0;
+    border-top: 2px solid var(--border);
+    transition: border-color 0.25s, background 0.25s;
   }
-  .vb-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
-  .vb-title { font-family: var(--mono); font-size: 10px; color: #a02020; letter-spacing: 0.1em; font-weight: 700; }
-  .vb-close { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 14px; }
-  #violations-list { font-family: var(--mono); font-size: 10px; color: #802020; line-height: 1.8; }
+  #coll-report-panel.alert {
+    border-top-color: var(--red);
+    background: #fff5f5;
+    animation: coll-flash 0.5s ease-out;
+  }
+  @keyframes coll-flash {
+    0%   { background: #ffd0d0; }
+    100% { background: #fff5f5; }
+  }
+  #coll-report-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 12px; background: var(--ui-bg1);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 10px; color: var(--text2);
+    letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600;
+    transition: background 0.25s, color 0.25s;
+  }
+  #coll-report-panel.alert #coll-report-head {
+    background: #fdecea; color: var(--red);
+  }
+  #coll-report-badge {
+    font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 2px;
+    background: var(--ui-bg2); color: var(--text2);
+    transition: background 0.25s, color 0.25s;
+    letter-spacing: 0.08em;
+  }
+  #coll-report-panel.alert #coll-report-badge {
+    background: var(--red); color: #fff;
+  }
+  #coll-report {
+    padding: 6px 12px; font-family: var(--mono); font-size: 10px;
+    line-height: 1.9; max-height: 120px; overflow-y: auto; color: var(--text2);
+  }
+  #coll-report .coll-item {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--red); padding: 1px 0;
+  }
+  #coll-report .coll-item::before {
+    content: '!'; font-weight: 700; font-size: 10px;
+    background: var(--red); color: #fff;
+    width: 14px; height: 14px; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  #coll-report .limit-item {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--amber); padding: 1px 0;
+  }
+  #coll-report .limit-item::before {
+    content: '⚠'; font-size: 10px; flex-shrink: 0;
+  }
+  #coll-report .ok-msg { color: var(--green); }
+
+  /* ── Update banner ── */
+  #update-banner {
+    display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 9000;
+    background: var(--accent); color: #fff;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+    padding: 8px 16px; display: none;
+    align-items: center; justify-content: space-between; gap: 12px;
+    border-top: 2px solid var(--accent-hi);
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.25);
+  }
+  #update-banner.visible { display: flex; }
+  #update-banner .ub-msg { display: flex; align-items: center; gap: 8px; }
+  #update-banner .ub-dot { width: 7px; height: 7px; border-radius: 50%; background: #7ef; flex-shrink: 0; animation: ub-pulse 1.4s ease-in-out infinite; }
+  @keyframes ub-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  #update-banner .ub-btns { display: flex; gap: 8px; flex-shrink: 0; }
+  #update-banner .ub-reload {
+    background: #fff; color: var(--accent); border: none;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    padding: 5px 14px; cursor: pointer; letter-spacing: 0.08em; border-radius: 2px;
+  }
+  #update-banner .ub-reload:hover { background: #e8f0ff; }
+  #update-banner .ub-dismiss {
+    background: transparent; color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.3);
+    font-family: var(--mono); font-size: 11px;
+    padding: 5px 10px; cursor: pointer; letter-spacing: 0.08em; border-radius: 2px;
+  }
+  #update-banner .ub-dismiss:hover { color: #fff; border-color: rgba(255,255,255,0.6); }
 
   /* ── Right panel ── */
   #right-panel {
@@ -773,14 +851,6 @@
         </div>
       </div>
 
-      <!-- Violations bar -->
-      <div id="violations-bar">
-        <div class="vb-head">
-          <span class="vb-title">⚠ LIMIT / COLLISION VIOLATIONS</span>
-          <button class="vb-close" id="violations-close">×</button>
-        </div>
-        <div id="violations-list"></div>
-      </div>
     </div>
 
     <!-- Right: Info Panel -->
@@ -853,13 +923,13 @@
         <div id="gcode-ctx"></div>
       </div>
 
-      <!-- Collision report -->
-      <div class="ps" style="flex-shrink:0;border-top:1px solid var(--border);">
-        <div class="ps-head" style="display:flex;align-items:center;justify-content:space-between;">
-          <span>COLLISION REPORT</span>
-          <span id="coll-report-badge" style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:2px;background:var(--ui-bg2);color:var(--text2);">OK</span>
+      <!-- Collision / Limit report -->
+      <div id="coll-report-panel">
+        <div id="coll-report-head">
+          <span>VIOLATIONS</span>
+          <span id="coll-report-badge">OK</span>
         </div>
-        <div id="coll-report" style="padding:6px 12px;font-family:var(--mono);font-size:10px;line-height:1.9;max-height:100px;overflow-y:auto;color:var(--text2);">No data</div>
+        <div id="coll-report"><span class="ok-msg">No violations</span></div>
       </div>
 
     </div>
@@ -1619,9 +1689,38 @@ function rebuildAll(resetProgress){
   },10);
 }
 
-document.getElementById('violations-close').addEventListener('click',()=>{
-  document.getElementById('violations-bar').style.display='none';
-});
+// ── Unified violation state (collisions + limits) ─────────────────
+// Both checkLimits() and checkCollisions() write here; panel updates atomically.
+let _limitViolations   = []; // strings
+let _collisionViolations = []; // strings
+
+function renderViolationPanel(){
+  const panel = document.getElementById('coll-report-panel');
+  const badge = document.getElementById('coll-report-badge');
+  const report = document.getElementById('coll-report');
+
+  const hasCollisions = _collisionViolations.length > 0;
+  const hasLimits     = _limitViolations.length > 0;
+  const hasAny        = hasCollisions || hasLimits;
+
+  panel.classList.toggle('alert', hasAny);
+  badge.textContent = hasAny
+    ? (hasCollisions && hasLimits ? `${_collisionViolations.length} COLL · ${_limitViolations.length} LIM`
+      : hasCollisions ? `${_collisionViolations.length} COLLISION${_collisionViolations.length>1?'S':''}`
+      : `${_limitViolations.length} LIMIT${_limitViolations.length>1?'S':''}`)
+    : 'OK';
+
+  if(!hasAny){
+    report.innerHTML = '<span class="ok-msg">No violations</span>';
+    return;
+  }
+  const rows = [
+    ..._collisionViolations.map(v=>`<div class="coll-item">${v}</div>`),
+    ..._limitViolations.map(v=>`<div class="limit-item">${v}</div>`),
+  ];
+  report.innerHTML = rows.join('');
+}
+
 
 function getLimits(){
   return {
@@ -1640,8 +1739,8 @@ function getLimits(){
 
 function checkLimits(){
   const L=getLimits();
-  const violations=[];
-  const seen={}; // dedupe per axis+direction
+  const seen={};
+  _limitViolations=[];
 
   const axes=[
     {key:'x', label:'X', min:L.xmin, max:L.xmax, get:m=>m.mx},
@@ -1654,33 +1753,18 @@ function checkLimits(){
     const m=allMoves[i];
     for(const ax of axes){
       const v=ax.get(m);
+      const unit=ax.key==='b'||ax.key==='c'?'°':'mm';
       if(v<ax.min){
         const k=ax.key+'-min';
-        if(!seen[k]){
-          seen[k]=true;
-          const unit=ax.key==='b'||ax.key==='c'?'°':'mm';
-          violations.push(`<div class="axis-viol" style="color:#fca5a5;">Line ${m.lineNum}: ${ax.label} = ${v.toFixed(2)}${unit} &lt; min (${ax.min}${unit})</div>`);
-        }
+        if(!seen[k]){ seen[k]=true; _limitViolations.push(`L${m.lineNum}: ${ax.label} ${v.toFixed(2)}${unit} &lt; ${ax.min}`); }
       }
       if(v>ax.max){
         const k=ax.key+'-max';
-        if(!seen[k]){
-          seen[k]=true;
-          const unit=ax.key==='b'||ax.key==='c'?'°':'mm';
-          violations.push(`<div class="axis-viol" style="color:#fca5a5;">Line ${m.lineNum}: ${ax.label} = ${v.toFixed(2)}${unit} &gt; max (${ax.max}${unit})</div>`);
-        }
+        if(!seen[k]){ seen[k]=true; _limitViolations.push(`L${m.lineNum}: ${ax.label} ${v.toFixed(2)}${unit} &gt; ${ax.max}`); }
       }
     }
   }
-
-  const bar=document.getElementById('violations-bar');
-  const list=document.getElementById('violations-list');
-  // Clear previous axis violations but preserve collision div
-  const collDiv=document.getElementById('coll-violations');
-  list.innerHTML=violations.join('');
-  if(collDiv && !list.contains(collDiv)) list.appendChild(collDiv);
-  const hasContent = violations.length || (collDiv && collDiv.innerHTML.trim());
-  bar.style.display = hasContent ? 'block' : 'none';
+  renderViolationPanel();
 }
 document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('fi').click());
 document.getElementById('fi').addEventListener('change',ev=>{
@@ -2317,12 +2401,9 @@ function pointCloudsOverlap(ptsA, ptsB){
 function gjkOverlap(ptsA,ptsB){ return pointCloudsOverlap(ptsA,ptsB); }
 
 function checkCollisions(){
-  const report=document.getElementById('coll-report');
-  const badge=document.getElementById('coll-report-badge');
   if(!collisionEnabled||!collProxies.length||!machineLoaded){
-    const cd=document.getElementById('coll-violations'); if(cd) cd.innerHTML='';
-    if(report){report.textContent='No data';report.style.color='var(--text2)';}
-    if(badge){badge.textContent='OK';badge.style.background='var(--ui-bg2)';badge.style.color='var(--text2)';}
+    _collisionViolations=[];
+    renderViolationPanel();
     return;
   }
   // Force matrix update even on invisible objects
@@ -2360,31 +2441,16 @@ function checkCollisions(){
       }
     }
   }
-  document.getElementById('coll-status').textContent=loopDebug.join(' | ')||'no pairs checked';
-  // Also write to always-visible report panel
-  if(report) report.innerHTML='<div style="font-size:9px;color:var(--text2);">'+(loopDebug.join(' | ')||'no pairs checked')+'</div>';
-  if(report){
-    if(violations.length){
-      report.innerHTML=violations.map(v=>'<div style="color:var(--red);">! '+v+'</div>').join('');
-    } else {
-      report.innerHTML='<span style="color:var(--green);">OK - No collisions</span>';
-    }
-  }
   // Restore machine visibility to user setting
   machineGroup.visible=document.getElementById('showMach').checked;
-  if(badge){
-    badge.textContent=violations.length?violations.length+' HIT':'OK';
-    badge.style.background=violations.length?'#fdecea':'var(--ui-bg2)';
-    badge.style.color=violations.length?'var(--red)':'var(--green)';
-  }
-  const list=document.getElementById('violations-list');
-  let collDiv=document.getElementById('coll-violations');
-  if(!collDiv){collDiv=document.createElement('div');collDiv.id='coll-violations';list.appendChild(collDiv);}
-  collDiv.innerHTML=violations.map(v=>'<div>COLLISION: '+v+'</div>').join('');
-  const bar=document.getElementById('violations-bar');
-  bar.style.display=(list.textContent.trim())?'block':'none';
+
+  // Update coll-status label inside the config modal
   document.getElementById('coll-status').textContent=
     violations.length?violations.length+' collision(s) detected':'No collisions detected';
+
+  // Feed unified panel
+  _collisionViolations = violations.map(v => v.replace(/ <-> /, ' ↔ '));
+  renderViolationPanel();
 }
 
 // ── Proxy Transform Gizmo ─────────────────────────────────────────
@@ -2978,6 +3044,80 @@ document.getElementById('exampleSelect').addEventListener('change', async functi
   }
   this.value='';
 });
-</script>
+// ── Version check & service worker ───────────────────────────────
+(function(){
+  const CURRENT_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0.0.0';
+  const banner   = document.getElementById('update-banner');
+  const reloadBtn = document.getElementById('ub-reload-btn');
+  const dismissBtn = document.getElementById('ub-dismiss-btn');
+
+  // Show banner and wire up buttons
+  function showUpdateBanner(){
+    banner.classList.add('visible');
+  }
+  reloadBtn.addEventListener('click', () => {
+    // Skip the SW cache and do a hard reload
+    if(navigator.serviceWorker?.controller){
+      navigator.serviceWorker.controller.postMessage({type:'SKIP_WAITING'});
+    }
+    window.location.reload(true);
+  });
+  dismissBtn.addEventListener('click', () => {
+    banner.classList.remove('visible');
+  });
+
+  if(!('serviceWorker' in navigator)) return;
+
+  // Register the service worker
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+
+    // If a new SW is waiting right away (e.g. hard refresh found a queued update)
+    if(reg.waiting) { showUpdateBanner(); return; }
+
+    // If a new SW starts installing, wait for it to reach 'waiting'
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
+          showUpdateBanner();
+        }
+      });
+    });
+
+  }).catch(err => console.warn('SW registration failed:', err));
+
+  // Also do a lightweight version fetch ourselves — catches cases where the SW
+  // didn't update yet but the live file already has a newer version stamp.
+  // Uses cache:no-store so it always hits the network.
+  async function checkVersionViaFetch(){
+    try {
+      const res = await fetch(window.location.href, {cache:'no-store', method:'GET'});
+      if(!res.ok) return;
+      const html = await res.text();
+      const match = html.match(/<meta\s+name="app-version"\s+content="([^"]+)"/);
+      if(match && match[1] !== CURRENT_VERSION){
+        showUpdateBanner();
+      }
+    } catch(e){ /* offline — silent */ }
+  }
+
+  // Check once on load (after a short delay so it doesn't compete with startup)
+  // and then every 5 minutes while the tab stays open.
+  setTimeout(checkVersionViaFetch, 4000);
+  setInterval(checkVersionViaFetch, 5 * 60 * 1000);
+})();
+
+<!-- Update banner -->
+<div id="update-banner">
+  <div class="ub-msg">
+    <span class="ub-dot"></span>
+    <span>A new version of 5AXIS.SIM is available</span>
+  </div>
+  <div class="ub-btns">
+    <button class="ub-reload" id="ub-reload-btn">↺ RELOAD</button>
+    <button class="ub-dismiss" id="ub-dismiss-btn">Later</button>
+  </div>
+</div>
+
 </body>
 </html>
