@@ -409,9 +409,6 @@
   }
   #coll-modal .modal-head { cursor: default; }
   #coll-list { overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
-  /* Constrain the proxy grid columns so they don't blow out the panel */
-  .coll-header-row,
-  .coll-proxy { grid-template-columns: 70px 40px 58px 52px 52px 52px 80px 24px !important; }
   .modal-box {
     background: var(--ui-bg0); border: 1px solid var(--border-hi);
     border-top: 3px solid var(--accent);
@@ -458,27 +455,37 @@
   .s-chip.on { background: var(--ui-bg2); border-color: var(--border-hi); color: var(--text0); }
 
   /* Collision modal */
+  /* Collision proxy row — two-line card layout */
   .coll-proxy {
-    display: grid; grid-template-columns: 72px 52px 62px 1fr 1fr 1fr 1fr 26px;
-    gap: 4px; align-items: center; padding: 5px 12px;
+    display: flex; flex-direction: column;
+    gap: 4px; padding: 6px 10px;
     border-bottom: 1px solid var(--border-lt);
+    cursor: pointer;
   }
   .coll-proxy:hover { background: var(--ui-bg1); }
+  .coll-proxy-row1 { display: flex; gap: 4px; align-items: center; }
+  .coll-proxy-row2 { display: flex; gap: 4px; align-items: center; }
   .coll-proxy input, .coll-proxy select {
     background: #fff; border: 1px solid var(--border);
     color: var(--text0); font-family: var(--mono); font-size: 10px;
-    padding: 3px 5px; border-radius: 0; width: 100%;
+    padding: 3px 4px; border-radius: 0;
   }
-  .coll-proxy .del-btn { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 15px; padding: 0; }
+  .cp-part  { flex: 1; min-width: 0; }
+  .cp-group { font-family: var(--mono); font-size: 10px; color: var(--cyan); white-space: nowrap; padding: 0 4px; }
+  .cp-type  { width: 68px; flex-shrink: 0; }
+  .cp-num   { width: 46px; flex-shrink: 0; }
+  .cp-off   { flex: 1; min-width: 0; }
+  .coll-proxy .del-btn {
+    background: none; border: none; color: var(--text2);
+    cursor: pointer; font-size: 15px; padding: 0 2px; flex-shrink: 0;
+    margin-left: auto;
+  }
   .coll-proxy .del-btn:hover { color: var(--red); }
-  #coll-footer { padding: 9px 12px; border-top: 1px solid var(--border); display: flex; gap: 7px; flex-wrap: wrap; background: var(--ui-bg1); }
-  .coll-header-row {
-    display: grid; grid-template-columns: 72px 52px 62px 1fr 1fr 1fr 1fr 26px;
-    gap: 4px; padding: 4px 12px;
-    font-size: 9px; font-family: var(--mono); color: var(--text2); font-weight: 600;
-    letter-spacing: 0.08em; border-bottom: 1px solid var(--border); background: var(--ui-bg1);
-    text-transform: uppercase;
-  }
+  .coll-nums-row { display: flex; gap: 4px; align-items: center; flex: 1; }
+  .coll-size-label { font-family: var(--mono); font-size: 9px; color: var(--text2); white-space: nowrap; }
+  #coll-footer { padding: 9px 10px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: wrap; background: var(--ui-bg1); }
+  #coll-footer .h-btn { flex: 1 1 calc(50% - 6px); text-align: center; font-size: 10px; padding: 6px 4px; }
+  .coll-header-row { display: none; } /* replaced by inline labels */
   #coll-status { font-size: 10px; font-family: var(--mono); padding: 6px 12px; color: var(--text2); border-top: 1px solid var(--border-lt); min-height: 24px; background: var(--ui-bg1); }
 
   .s-mach-op {
@@ -685,27 +692,7 @@
     #coll-modal .modal-head label { font-size: 12px; }
 
     /* Collision table: replace multi-column grid with stacked cards */
-    .coll-header-row { display: none; }
-    #coll-list .coll-proxy {
-      display: flex !important;
-      flex-direction: column !important;
-      gap: 6px !important;
-      padding: 10px 14px !important;
-      border-bottom: 1px solid var(--border);
-    }
-    #coll-list .coll-proxy > * { width: 100% !important; min-width: 0 !important; }
-    #coll-list .coll-proxy input[type=number],
-    #coll-list .coll-proxy input[type=text],
-    #coll-list .coll-proxy select {
-      width: 100% !important; height: 32px !important; font-size: 13px !important;
-    }
-    /* Size inputs side by side */
-    #coll-list .coll-proxy .coll-nums {
-      display: grid !important;
-      grid-template-columns: repeat(3, 1fr) !important;
-      gap: 5px !important;
-    }
-    #coll-list .coll-proxy .coll-nums input { width: 100% !important; }
+    /* coll-proxy now uses two-line card layout — no mobile overrides needed */
 
     /* Collision footer — wrap buttons */
     #coll-footer {
@@ -823,8 +810,8 @@
           </label>
         </div>
       </div>
-      <div style="padding:6px 12px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--cyan);" id="coll-selected-part">Click a machine part in the 3D view to select it for proxy assignment</div>
-      <div id="coll-groups-bar" style="padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div style="padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--cyan);line-height:1.4;" id="coll-selected-part">Click a machine part in the 3D view to select it for proxy assignment</div>
+      <div id="coll-groups-bar" style="padding:6px 10px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:4px 8px;align-items:center;flex-wrap:wrap;font-size:10px;">
         <span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>
       </div>
       <div class="coll-header-row">
@@ -3325,23 +3312,29 @@ function renderProxyList(){
     const row = document.createElement('div');
     row.className = 'coll-proxy';
     row.innerHTML = `
-      <select class="cp-part" data-id="${proxy.id}">
-        ${MACHINE_PARTS.map(p=>`<option value="${p}" ${p===proxy.part?'selected':''}>${p}</option>`).join('')}
-      </select>
-      <span style="font-family:var(--mono);font-size:10px;color:var(--cyan);text-align:center;" title="${proxy.label||proxy.part}">G${partGroups[proxy.part]??1}${proxy.type==='hull'&&proxy.label?.includes('hull 2')?' ②':''}</span>
-      <select class="cp-type" data-id="${proxy.id}">
-        <option value="box" ${proxy.type==='box'?'selected':''}>Box</option>
-        <option value="cylinder" ${proxy.type==='cylinder'?'selected':''}>Cyl</option>
-        <option value="sphere" ${proxy.type==='sphere'?'selected':''}>Sphere</option>
-        <option value="hull" ${proxy.type==='hull'?'selected':''}>Hull ✓</option>
-      </select>
-      <div class="coll-nums">
-        <input class="cp-sx" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="W/R" ${proxy.type==='hull'?'disabled':''}>
-        <input class="cp-sy" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="H" ${proxy.type==='hull'?'disabled':''}>
-        <input class="cp-sz" type="number" data-id="${proxy.id}" value="${proxy.sz||proxy.sx}" step="1" min="1" title="D (box)" ${proxy.type!=='box'?'disabled':''}>
+      <div class="coll-proxy-row1">
+        <select class="cp-part" data-id="${proxy.id}">
+          ${MACHINE_PARTS.map(p=>`<option value="${p}" ${p===proxy.part?'selected':''}>${p}</option>`).join('')}
+        </select>
+        <span class="cp-group" title="${proxy.label||proxy.part}">G${partGroups[proxy.part]??1}${proxy.type==='hull'&&proxy.label?.includes('hull 2')?' ②':''}</span>
+        <select class="cp-type" data-id="${proxy.id}">
+          <option value="box" ${proxy.type==='box'?'selected':''}>Box</option>
+          <option value="cylinder" ${proxy.type==='cylinder'?'selected':''}>Cyl</option>
+          <option value="sphere" ${proxy.type==='sphere'?'selected':''}>Sphere</option>
+          <option value="hull" ${proxy.type==='hull'?'selected':''}>Hull ✓</option>
+        </select>
+        <button class="del-btn" data-id="${proxy.id}">×</button>
       </div>
-      <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0" ${proxy.type==='hull'?'disabled':''}>
-      <button class="del-btn" data-id="${proxy.id}">×</button>
+      <div class="coll-proxy-row2">
+        <span class="coll-size-label">W/R</span>
+        <input class="cp-sx cp-num" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="Width/Radius" ${proxy.type==='hull'?'disabled':''}>
+        <span class="coll-size-label">H</span>
+        <input class="cp-sy cp-num" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="Height" ${proxy.type==='hull'?'disabled':''}>
+        <span class="coll-size-label">D</span>
+        <input class="cp-sz cp-num" type="number" data-id="${proxy.id}" value="${proxy.sz||proxy.sx}" step="1" min="1" title="Depth (box only)" ${proxy.type!=='box'?'disabled':''}>
+        <span class="coll-size-label">off</span>
+        <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0" ${proxy.type==='hull'?'disabled':''}>
+      </div>
     `;
     container.appendChild(row);
     // Click row to select proxy and show gizmo
