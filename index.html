@@ -380,19 +380,32 @@
   .modal-overlay.open { display: flex; }
 
   /* Collision modal — floating, no backdrop, pointer-events pass through */
+  /* ── Collision panel: fixed left-side drawer ── */
   #coll-overlay {
-    display: none; position: fixed; inset: 0;
-    background: none; z-index: 100;
-    pointer-events: none; /* canvas stays interactive */
+    display: none; position: fixed;
+    top: 36px; left: 0; bottom: 0;
+    width: 520px;
+    background: var(--ui-bg0);
+    border-right: 2px solid var(--accent);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.25);
+    z-index: 200;
+    pointer-events: all;
+    transform: translateX(-100%);
+    transition: transform 0.22s cubic-bezier(0.32,0.72,0,1);
+    display: flex; flex-direction: column;
   }
-  #coll-overlay.open { display: block; }
+  #coll-overlay.open { display: flex; transform: translateX(0); }
   #coll-modal {
-    pointer-events: all; /* modal itself is interactive */
-    position: absolute; top: 60px; left: 220px;
-    cursor: default; user-select: none;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    display: flex; flex-direction: column;
+    flex: 1; min-height: 0;
+    pointer-events: all;
+    position: static;
+    width: 100%; max-height: none;
+    border: none; box-shadow: none;
+    border-top: none;
   }
-  #coll-modal .modal-head { cursor: move; }
+  #coll-modal .modal-head { cursor: default; }
+  #coll-list { overflow-y: auto; flex: 1; min-height: 0; }
   .modal-box {
     background: var(--ui-bg0); border: 1px solid var(--border-hi);
     border-top: 3px solid var(--accent);
@@ -400,6 +413,7 @@
     box-shadow: 0 8px 32px rgba(0,0,0,0.25);
   }
   .modal-box.wide { width: 580px; }
+  #coll-modal.modal-box { width: 100%; max-height: none; border: none; box-shadow: none; }
   .modal-head {
     display: flex; align-items: center; justify-content: space-between;
     padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--ui-bg1);
@@ -699,24 +713,16 @@
     #coll-groups-bar { flex-wrap: wrap; gap: 6px; padding: 8px 14px; }
 
 
-    /* ── Collision modal: full-screen sheet on mobile ── */
+    /* ── Collision panel on mobile: left drawer, narrower ── */
     #coll-overlay {
-      background: rgba(0,0,0,0.45) !important;
-      pointer-events: all !important;
+      top: 40px !important;
+      width: min(320px, 85vw) !important;
+      border-right: 2px solid var(--accent) !important;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.3) !important;
     }
-    #coll-modal {
-      position: fixed !important;
-      top: auto !important; bottom: 0 !important;
-      left: 0 !important; right: 0 !important;
-      width: 100vw !important; max-width: 100vw !important;
-      max-height: 88vh !important;
-      border-radius: 14px 14px 0 0 !important;
-      border-left: none !important; border-right: none !important; border-bottom: none !important;
-      overflow-y: auto !important;
-      cursor: default !important;
-    }
-    /* disable drag handle style on mobile */
-    #coll-modal .modal-head { cursor: default !important; }
+
+
+    body.coll-open #canvas-col { margin-left: 0 !important; }
 
   /* Desktop: never show mobile-only elements */
   @media (min-width: 901px) {
@@ -3220,56 +3226,39 @@ function getProxyHit(e){
 function screenToAxisDelta(e, prevE, axisKey){
   if(!gizmoGroup || !gizmoGroup.parent) return 0;
 
-  // The axis in part-group local space (always aligned with local axes)
-  const axisLocal = {
-    x: new THREE.Vector3(1,0,0),
-    y: new THREE.Vector3(0,1,0),
-    z: new THREE.Vector3(0,0,1),
-  }[axisKey];
-
-  // Transform local axis → world for screen projection
-  const axisWorld = axisLocal.clone().transformDirection(gizmoGroup.parent.matrixWorld).normalize();
+  // Ensure world matrices are current
+  gizmoGroup.parent.updateWorldMatrix(true, false);
 
   const rect = cvWrap.getBoundingClientRect();
   const W = rect.width, H = rect.height;
 
-  // Get gizmo world position and project two points to screen
-  const gizmoWorldPos = new THREE.Vector3();
-  gizmoGroup.getWorldPosition(gizmoWorldPos);
-  const p1 = gizmoWorldPos.clone().project(camera);
-  const p2 = gizmoWorldPos.clone().addScaledVector(axisWorld, 10).project(camera);
+  // Gizmo origin in world space
+  const origin = new THREE.Vector3();
+  gizmoGroup.getWorldPosition(origin);
 
-  // Screen-space axis direction (pixels)
-  const sx = (p2.x - p1.x) * W * 0.5;
-  const sy = (p2.y - p1.y) * H * 0.5; // NDC Y flipped vs screen Y, cancel below
+  // A point 50 local units along the axis, in world space
+  const localTip = { x: new THREE.Vector3(50,0,0), y: new THREE.Vector3(0,50,0), z: new THREE.Vector3(0,0,50) }[axisKey];
+  // Transform tip from gizmoGroup local → world
+  const tip = localTip.clone().applyMatrix4(gizmoGroup.matrixWorld);
+
+  // Project both to NDC then to pixels
+  const o2 = origin.clone().project(camera);
+  const t2 = tip.clone().project(camera);
+  const sx = (t2.x - o2.x) * W * 0.5;
+  const sy = -(t2.y - o2.y) * H * 0.5; // flip Y: NDC +Y = screen -Y
   const sLen = Math.sqrt(sx*sx + sy*sy);
-  if(sLen < 0.5) return 0;
+  if(sLen < 1) return 0;
 
-  // Mouse delta in pixels (screen Y inverted vs NDC Y)
-  const dx =   e.clientX - prevE.clientX;
-  const dy = -(e.clientY - prevE.clientY);
+  // Mouse delta in screen pixels
+  const dx = e.clientX - prevE.clientX;
+  const dy = e.clientY - prevE.clientY;
 
-  // How far along the screen axis did the mouse move?
+  // Project mouse movement onto screen axis
   const screenDot = (dx*sx + dy*sy) / sLen;
 
-  // screen pixels → world units: 10 world units projected to sLen pixels
-  const worldDelta = screenDot * (10 / sLen);
-
-  // World units → local units: account for the part group's world scale.
-  // Extract the X-axis world-scale from the parent's matrixWorld column length.
-  const parentMat = gizmoGroup.parent.matrixWorld;
-  const parentScaleAlongAxis = new THREE.Vector3(
-    parentMat.elements[0], parentMat.elements[1], parentMat.elements[2]
-  ).length(); // scale of X column; for uniform scale this works for all axes
-  // More precisely: use the scale along the specific axis column
-  const col = axisKey === 'x' ? 0 : axisKey === 'y' ? 4 : 8; // column offsets
-  const axisColLen = new THREE.Vector3(
-    parentMat.elements[col],
-    parentMat.elements[col+1],
-    parentMat.elements[col+2]
-  ).length();
-
-  return axisColLen > 0.0001 ? worldDelta / axisColLen : worldDelta;
+  // Convert: screenDot pixels → local units
+  // sLen pixels = 50 local units (the tip was 50 local units away)
+  return screenDot * (50 / sLen);
 }
 
 // ── Click to select proxy ─────────────────────────────────────────
@@ -3394,6 +3383,48 @@ function updateProxy(el){
   rebuildProxyWireframes();
 }
 
+
+// ── Gizmo touch support (mobile) ─────────────────────────────────
+cvWrap.addEventListener('touchstart', e => {
+  if(!collConfigOpen || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const ax = getGizmoHit(t);
+  if(!ax) return;
+  gizmoDragging = true;
+  gizmoAxis = ax;
+  gizmoPrevEvent = { clientX: t.clientX, clientY: t.clientY };
+  const proxy = collProxies.find(p => p.id === selectedProxyId);
+  if(proxy) gizmoProxyStart = { ox: proxy.ox||0, oy: proxy.oy||0, oz: proxy.oz||0 };
+  e.preventDefault();
+  e.stopPropagation();
+}, { passive: false });
+
+window.addEventListener('touchmove', e => {
+  if(!gizmoDragging || !gizmoAxis || selectedProxyId === null) return;
+  const t = e.touches[0];
+  const proxy = collProxies.find(p => p.id === selectedProxyId);
+  if(!proxy) return;
+  const delta = screenToAxisDelta(t, gizmoPrevEvent, gizmoAxis);
+  gizmoPrevEvent = { clientX: t.clientX, clientY: t.clientY };
+  proxy.ox = (proxy.ox||0) + (gizmoAxis==='x' ? delta : 0);
+  proxy.oy = (proxy.oy||0) + (gizmoAxis==='y' ? delta : 0);
+  proxy.oz = (proxy.oz||0) + (gizmoAxis==='z' ? delta : 0);
+  if(gizmoGroup) gizmoGroup.position.set(proxy.ox, proxy.oy, proxy.oz);
+  const mesh = proxyMeshes[proxy.id];
+  if(mesh) mesh.position.set(proxy.ox, proxy.oy, proxy.oz);
+  const offEl = document.querySelector(`.cp-off[data-id="${proxy.id}"]`);
+  if(offEl) offEl.value = `${proxy.ox.toFixed(1)},${proxy.oy.toFixed(1)},${proxy.oz.toFixed(1)}`;
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener('touchend', e => {
+  if(gizmoDragging) {
+    gizmoDragging = false;
+    gizmoAxis = null;
+    gizmoPrevEvent = null;
+  }
+});
+
 // ── Modal wiring ──────────────────────────────────────────────────
 document.getElementById('collBtn').addEventListener('click',()=>{
   collConfigOpen=true;
@@ -3426,6 +3457,7 @@ document.getElementById('collBtn').addEventListener('click',()=>{
   bar.appendChild(hint);
   renderProxyList();
   document.getElementById('coll-overlay').classList.add('open');
+  document.body.classList.add('coll-open');
 });
 document.getElementById('collClose').addEventListener('click',()=>{
   collConfigOpen=false;
@@ -3433,30 +3465,12 @@ document.getElementById('collClose').addEventListener('click',()=>{
   selectProxy(null);
   setProxyWireframesVisible(shouldShowProxies());
   document.getElementById('coll-overlay').classList.remove('open');
+  document.body.classList.remove('coll-open');
 });
 // coll-overlay: close on backdrop tap
-document.getElementById('coll-overlay').addEventListener('click',e=>{ if(e.target===e.currentTarget) document.getElementById('coll-overlay').classList.remove('open'); });
+// coll-overlay is now a side panel — close via × button only
 
-// ── Draggable collision modal ─────────────────────────────────────
-(function(){
-  const modal = document.getElementById('coll-modal');
-  const handle = modal.querySelector('.modal-head');
-  let dragging=false, ox=0, oy=0;
-  handle.addEventListener('mousedown', e=>{
-    if(e.target.classList.contains('close-btn')) return;
-    dragging=true;
-    const rect=modal.getBoundingClientRect();
-    ox=e.clientX-rect.left; oy=e.clientY-rect.top;
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', e=>{
-    if(!dragging) return;
-    const x=e.clientX-ox, y=e.clientY-oy;
-    modal.style.left=Math.max(0,x)+'px';
-    modal.style.top=Math.max(0,y)+'px';
-  });
-  window.addEventListener('mouseup', ()=>{ dragging=false; });
-})();
+// Collision panel is now a fixed left-side drawer — no drag needed
 
 document.getElementById('coll-show-proxies').addEventListener('change',function(){
   setProxyWireframesVisible(this.checked);
