@@ -3661,10 +3661,10 @@ document.getElementById('exampleSelect').addEventListener('change', async functi
     const drawer = document.getElementById('mob-drawer-' + name);
     if(!drawer) return;
 
-    // Toggle off if already open
+    // Same button again = close
     if(activeDrawer === name) { mobDrawerClose(); return; }
 
-    // Close any open panel first
+    // Switch to new panel
     document.querySelectorAll('.mob-drawer').forEach(d => d.classList.remove('open'));
     document.querySelectorAll('.mob-dock-btn').forEach(b => b.classList.remove('active'));
 
@@ -3685,11 +3685,6 @@ document.getElementById('exampleSelect').addEventListener('change', async functi
     document.querySelectorAll('.mob-dock-btn').forEach(b => b.classList.remove('active'));
     activeDrawer = null;
   };
-
-  // Close panel when tapping the canvas
-  document.getElementById('cv').addEventListener('touchstart', () => {
-    if(activeDrawer) mobDrawerClose();
-  }, {passive: true});
 
   // ── Sync axis readouts to mobile drawer ──
   window.syncMobAxes = function() {
