@@ -381,14 +381,15 @@
 
   /* Collision modal — floating, no backdrop, pointer-events pass through */
   /* ── Collision panel: fixed left-side drawer ── */
+  /* ── Collision panel: fixed left side drawer ── */
   #coll-overlay {
     position: fixed;
     top: 36px; left: 196px; bottom: 0;
-    width: 400px; max-width: 400px;
+    width: 340px;
     overflow: hidden;
     background: var(--ui-bg0);
     border-right: 2px solid var(--accent);
-    box-shadow: 4px 0 24px rgba(0,0,0,0.25);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.2);
     z-index: 200;
     pointer-events: none;
     display: flex; flex-direction: column;
@@ -399,16 +400,20 @@
   #coll-overlay.open { transform: translateX(0); pointer-events: all; visibility: visible; }
   #coll-modal {
     display: flex; flex-direction: column;
-    flex: 1; min-height: 0; min-width: 0;
-    pointer-events: all;
+    flex: 1; min-height: 0;
     position: static;
-    width: 400px; max-width: 400px; max-height: none;
-    border: none; box-shadow: none;
-    border-top: none;
+    width: 100%; max-width: 100%; max-height: none;
+    border: none; box-shadow: none; border-top: none;
     overflow: hidden;
   }
-  #coll-modal .modal-head { cursor: default; }
+  #coll-modal .modal-head { cursor: default; flex-wrap: wrap; gap: 4px; padding: 8px 10px; }
+  #coll-modal .modal-head .title { font-size: 10px; }
+  #coll-modal .modal-head > div { flex-wrap: wrap; gap: 6px; width: 100%; }
+  #coll-modal .modal-head label { font-size: 10px !important; }
   #coll-list { overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
+  #coll-footer { flex-wrap: wrap; gap: 5px; padding: 7px 8px; }
+  #coll-footer .h-btn { flex: 1 1 calc(50% - 5px); text-align: center; font-size: 9px; padding: 5px 3px; white-space: nowrap; }
+  #coll-status { font-size: 9px; padding: 5px 10px; }
   .modal-box {
     background: var(--ui-bg0); border: 1px solid var(--border-hi);
     border-top: 3px solid var(--accent);
@@ -416,7 +421,7 @@
     box-shadow: 0 8px 32px rgba(0,0,0,0.25);
   }
   .modal-box.wide { width: 580px; }
-  #coll-modal.modal-box { width: 100%; max-height: none; border: none; box-shadow: none; }
+
   .modal-head {
     display: flex; align-items: center; justify-content: space-between;
     padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--ui-bg1);
@@ -458,34 +463,33 @@
   /* Collision proxy row — two-line card layout */
   .coll-proxy {
     display: flex; flex-direction: column;
-    gap: 4px; padding: 6px 10px;
+    gap: 3px; padding: 5px 8px;
     border-bottom: 1px solid var(--border-lt);
-    cursor: pointer;
+    cursor: pointer; box-sizing: border-box;
+    width: 100%; overflow: hidden;
   }
   .coll-proxy:hover { background: var(--ui-bg1); }
-  .coll-proxy-row1 { display: flex; gap: 4px; align-items: center; }
-  .coll-proxy-row2 { display: flex; gap: 4px; align-items: center; }
+  .coll-proxy-row1 { display: flex; gap: 3px; align-items: center; width: 100%; min-width: 0; }
+  .coll-proxy-row2 { display: flex; gap: 2px; align-items: center; width: 100%; min-width: 0; }
   .coll-proxy input, .coll-proxy select {
     background: #fff; border: 1px solid var(--border);
     color: var(--text0); font-family: var(--mono); font-size: 10px;
-    padding: 3px 4px; border-radius: 0;
+    padding: 2px 3px; border-radius: 0; box-sizing: border-box;
   }
-  .cp-part  { flex: 1; min-width: 0; }
-  .cp-group { font-family: var(--mono); font-size: 10px; color: var(--cyan); white-space: nowrap; padding: 0 4px; }
-  .cp-type  { width: 68px; flex-shrink: 0; }
-  .cp-num   { width: 46px; flex-shrink: 0; }
-  .cp-off   { flex: 1; min-width: 0; }
+  .cp-part  { flex: 1; min-width: 0; font-size: 10px; }
+  .cp-group { font-family: var(--mono); font-size: 9px; color: var(--cyan); white-space: nowrap; padding: 0 3px; flex-shrink: 0; }
+  .cp-type  { width: 62px; flex-shrink: 0; font-size: 10px; }
+  .cp-num   { width: 38px; flex-shrink: 0; text-align: right; }
+  .cp-off   { flex: 1; min-width: 0; font-size: 9px; }
   .coll-proxy .del-btn {
     background: none; border: none; color: var(--text2);
-    cursor: pointer; font-size: 15px; padding: 0 2px; flex-shrink: 0;
-    margin-left: auto;
+    cursor: pointer; font-size: 14px; padding: 0 2px; flex-shrink: 0;
+    line-height: 1;
   }
   .coll-proxy .del-btn:hover { color: var(--red); }
-  .coll-nums-row { display: flex; gap: 4px; align-items: center; flex: 1; }
-  .coll-size-label { font-family: var(--mono); font-size: 9px; color: var(--text2); white-space: nowrap; }
-  #coll-footer { padding: 9px 10px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: wrap; background: var(--ui-bg1); }
-  #coll-footer .h-btn { flex: 1 1 calc(50% - 6px); text-align: center; font-size: 10px; padding: 6px 4px; }
-  .coll-header-row { display: none; } /* replaced by inline labels */
+  .coll-size-label { font-family: var(--mono); font-size: 9px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+  #coll-footer { padding: 7px 8px; border-top: 1px solid var(--border); display: flex; gap: 5px; flex-wrap: wrap; background: var(--ui-bg1); }
+  .coll-header-row { display: none; }
   #coll-status { font-size: 10px; font-family: var(--mono); padding: 6px 12px; color: var(--text2); border-top: 1px solid var(--border-lt); min-height: 24px; background: var(--ui-bg1); }
 
   .s-mach-op {
@@ -695,12 +699,7 @@
     /* coll-proxy now uses two-line card layout — no mobile overrides needed */
 
     /* Collision footer — wrap buttons */
-    #coll-footer {
-      flex-wrap: wrap !important;
-      gap: 6px !important;
-      padding: 10px 14px !important;
-    }
-    #coll-footer .h-btn { flex: 1 1 calc(50% - 6px) !important; text-align: center !important; padding: 8px 4px !important; font-size: 10px !important; }
+    /* coll-footer handled by panel CSS */
 
     /* Groups bar wraps */
     #coll-groups-bar { flex-wrap: wrap; gap: 6px; padding: 8px 14px; }
