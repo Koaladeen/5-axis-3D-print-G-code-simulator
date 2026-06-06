@@ -1586,6 +1586,8 @@ function applyProgress(pct){
   updateNozzlePosition(moveIdx);
   updateBedRotation(moveIdx);
   updateMachine(moveIdx);
+  // Update violation panel on every frame (scrub, arrow keys, playback)
+  if(!isPlaying) checkCurrentMove();
 }
 
 // Update axis position bar indicators
@@ -1683,6 +1685,10 @@ function rebuildAll(resetProgress){
     document.getElementById('prog').value=0;
     applyProgress(0);
     checkLimits();
+    // Clear live violation state for the new file
+    _lastLimStr=''; _lastCollStr='';
+    _limitViolations=[]; _collisionViolations=[];
+    renderViolationPanel();
     document.getElementById('tb-status').textContent='';
     // Home the machine
     goHome();
@@ -1736,6 +1742,79 @@ function getLimits(){
     cmax: parseFloat(document.getElementById('lim-cmax').value),
   };
 }
+
+// ── Per-move check called every playback step ────────────────────
+// Returns true if any violation was found (so caller can pause).
+// Also updates the violation panel in real-time.
+function checkCurrentMove(){
+  const prog = document.getElementById('prog');
+  const pct  = parseInt(prog.value);
+  const frac = pct / 10000;
+  const moveIdx = Math.max(0, Math.floor(allMoves.length * frac) - 1);
+  const m = allMoves[moveIdx];
+  if(!m) return false;
+
+  const L = getLimits();
+  const axes = [
+    {key:'x', label:'X', val:m.mx, min:L.xmin, max:L.xmax, unit:'mm'},
+    {key:'y', label:'Y', val:m.my, min:L.ymin, max:L.ymax, unit:'mm'},
+    {key:'z', label:'Z', val:m.mz, min:L.zmin, max:L.zmax, unit:'mm'},
+    {key:'b', label:'B', val:m.mb, min:L.bmin, max:L.bmax, unit:'°'},
+  ];
+
+  const limViolations = [];
+  for(const ax of axes){
+    if(ax.val < ax.min) limViolations.push(`L${m.lineNum||'?'}: ${ax.label} ${ax.val.toFixed(2)}${ax.unit} &lt; ${ax.min}`);
+    else if(ax.val > ax.max) limViolations.push(`L${m.lineNum||'?'}: ${ax.label} ${ax.val.toFixed(2)}${ax.unit} &gt; ${ax.max}`);
+  }
+
+  // Collision check for current machine pose
+  let collViolations = [];
+  if(collisionEnabled && collProxies.length && machineLoaded){
+    machineGroup.visible = true;
+    scene.updateMatrixWorld(true);
+    const proxiesByPart = {};
+    for(const p of collProxies){
+      if(!proxiesByPart[p.part]) proxiesByPart[p.part] = [];
+      proxiesByPart[p.part].push(p);
+    }
+    const parts = Object.keys(proxiesByPart);
+    for(let i=0; i<parts.length; i++){
+      for(let j=i+1; j<parts.length; j++){
+        if(!shouldCheck(parts[i], parts[j])) continue;
+        for(const pa of proxiesByPart[parts[i]]){
+          for(const pb of proxiesByPart[parts[j]]){
+            const wA = getProxyWorldPts(pa), wB = getProxyWorldPts(pb);
+            if(!wA||!wB) continue;
+            if(pointCloudsOverlap(wA, wB)){
+              const key = parts[i]+' ↔ '+parts[j];
+              if(!collViolations.includes(key)) collViolations.push(key);
+              setProxyColliding(pa.id, true);
+              setProxyColliding(pb.id, true);
+            }
+          }
+        }
+      }
+    }
+    machineGroup.visible = document.getElementById('showMach').checked;
+  }
+
+  const hadViolation = limViolations.length > 0 || collViolations.length > 0;
+
+  // Only update the panel when state actually changes (avoid per-frame DOM thrash)
+  const limStr  = limViolations.join('|');
+  const collStr = collViolations.join('|');
+  if(limStr !== (_lastLimStr||'') || collStr !== (_lastCollStr||'')){
+    _lastLimStr  = limStr;
+    _lastCollStr = collStr;
+    _limitViolations    = limViolations;
+    _collisionViolations = collViolations;
+    renderViolationPanel();
+  }
+
+  return hadViolation;
+}
+let _lastLimStr = '', _lastCollStr = '';
 
 function checkLimits(){
   const L=getLimits();
@@ -1834,11 +1913,12 @@ function setPlaying(val){
 function stepForward(){
   const prog=document.getElementById('prog');
   const cur=parseInt(prog.value);
-  if(cur>=10000){ stopPlayback(); checkCollisions(); return; }
+  if(cur>=10000){ stopPlayback(); checkCurrentMove(); return; }
   const speed=parseInt(document.getElementById('pb-speed').value);
   const next=Math.min(10000, cur+speed);
   prog.value=next;
   applyProgress(next);
+  if(checkCurrentMove()) stopPlayback(); // pause on violation
 }
 
 function stopPlayback(){
