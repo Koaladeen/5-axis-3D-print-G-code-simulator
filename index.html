@@ -1843,6 +1843,7 @@ function checkCurrentMove(){
 
   // Collision check for current machine pose
   let collViolations = [];
+  clearAllPartColliding(); // reset tints each frame
   if(collisionEnabled && collProxies.length && machineLoaded){
     machineGroup.visible = true;
     scene.updateMatrixWorld(true);
@@ -1877,9 +1878,10 @@ function checkCurrentMove(){
     for(const part of collidingParts) setPartColliding(part, true);
     machineGroup.visible = document.getElementById('showMach').checked;
 
-    // ── Print mesh vs machine (group 3, experimental) ───────────────
+    // ── Print mesh vs machine (experimental) ──────────────────────
     const printEnabled = document.getElementById('coll-print-enabled')?.checked ?? false;
-    if(printEnabled && (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)){
+    if(printEnabled && collProxies.length && (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)){
+      scene.updateMatrixWorld(true);
       const hullPts = getPrintHullPts(moveIdx);
       if(hullPts && hullPts.length >= 4){
         for(const p of collProxies){
@@ -1889,6 +1891,13 @@ function checkCurrentMove(){
           if(pointCloudsOverlap(hullPts, wB)){
             const key = 'PrintMesh ↔ ' + p.part;
             if(!collViolations.includes(key)) collViolations.push(key);
+            setPartColliding(p.part, true);
+          }
+        }
+        // Clear parts that are no longer hit by print hull
+        for(const part of Object.keys(partCollidingState)){
+          if(!collidingParts.has(part) && !collViolations.some(k=>k.includes('↔ '+part))){
+            setPartColliding(part, false);
           }
         }
       }
@@ -2082,7 +2091,7 @@ let partHighlights = {}; // part name → original materials
 // Group 1 = toolhead side (X, Y)
 // Group 2 = bed side (Z, B, C)
 // Only proxies from DIFFERENT non-zero groups are checked.
-const DEFAULT_GROUPS = {Frame:0, Z:2, B:2, C:2, Y:1, X:1, PrintMesh:3};
+const DEFAULT_GROUPS = {Frame:0, Z:2, B:2, C:2, Y:1, X:1, PrintMesh:2};
 let partGroups = {...DEFAULT_GROUPS};
 
 function shouldCheck(a, b){
@@ -2345,6 +2354,52 @@ function setProxyColliding(id, colliding){
     if(c.isMesh) c.material.color.set(colliding?0xff2222:0xff4444);
     if(c.isLineSegments) c.material.color.set(colliding?0xff0000:0xff6666);
   });
+  // Also tint the actual machine part this proxy belongs to
+  const proxy = collProxies.find(p=>p.id===id);
+  if(proxy) setPartColliding(proxy.part, colliding);
+}
+
+// ── Machine part collision highlight ─────────────────────────────
+const partCollidingState = {};  // partName → bool
+const partOrigMats = {};        // partName → [{mesh, origEmissive, origEI}]
+
+function setPartColliding(partName, colliding){
+  if(partCollidingState[partName] === colliding) return;
+  partCollidingState[partName] = colliding;
+  const grp = mGrp[partName]; if(!grp) return;
+  if(colliding){
+    if(!partOrigMats[partName]){
+      const saved = [];
+      grp.traverse(c=>{
+        if(!c.isMesh || c.userData.isProxyMesh) return;
+        c.material = c.material.clone();
+        saved.push({mesh:c, origEmissive:c.material.emissive?.clone()||new THREE.Color(0), origEI:c.material.emissiveIntensity||0});
+      });
+      partOrigMats[partName] = saved;
+    }
+    grp.traverse(c=>{
+      if(!c.isMesh || c.userData.isProxyMesh) return;
+      c.material.emissive = new THREE.Color(0xcc0000);
+      c.material.emissiveIntensity = 0.7;
+    });
+  } else {
+    const saved = partOrigMats[partName];
+    if(saved){
+      for(const {mesh,origEmissive,origEI} of saved){
+        if(mesh.material){
+          mesh.material.emissive.copy(origEmissive);
+          mesh.material.emissiveIntensity = origEI;
+        }
+      }
+      delete partOrigMats[partName];
+    }
+  }
+}
+
+function clearAllPartColliding(){
+  for(const part of Object.keys(partCollidingState)){
+    if(partCollidingState[part]) setPartColliding(part, false);
+  }
 }
 
 // ── Part selection via raycasting ─────────────────────────────────
@@ -3269,6 +3324,9 @@ document.getElementById('exampleSelect').addEventListener('change', async functi
   });
 
   if(!('serviceWorker' in navigator)) return;
+  // Only register SW on the real deployment domain, not preview/sandbox environments
+  const allowedOrigins = ['https://koaladeen.github.io'];
+  if(!allowedOrigins.some(o => location.origin === o || location.origin.startsWith(o))) return;
 
   // Register the service worker
   navigator.serviceWorker.register('./sw.js').then(reg => {
