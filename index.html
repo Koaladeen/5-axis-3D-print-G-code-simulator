@@ -4,17 +4,735 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 <meta name="screen-orientation" content="landscape">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>5AXIS .SIM</title>
+<title>5-Axis G-code Simulator</title>
+<meta name="app-version" content="1.0.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-<!-- Styles -->
-<link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/ui.css">
-<link rel="stylesheet" href="css/mobile.css">
-</head>
-<body>
+  :root {
+    --vp-bg:    #b8bec6;   /* viewport — medium gray like Mastercam */
+    --ui-bg0:   #f0f1f2;   /* lightest — main panel bg */
+    --ui-bg1:   #e4e6e8;   /* toolbar / panel headers */
+    --ui-bg2:   #d8dadc;   /* section bg */
+    --ui-bg3:   #c8cacc;   /* input bg / pressed */
+    --ui-bg4:   #eaeced;   /* hover */
+    --border:   #a8aaac;
+    --border-hi:#888a8c;
+    --border-lt:#c8cacc;
+
+    --text0: #1a1c1e;   /* primary text — near black */
+    --text1: #3a3c3e;   /* secondary */
+    --text2: #6a6c6e;   /* muted */
+    --text3: #9a9c9e;   /* very muted */
+
+    --ax-x:  #c82020;
+    --ax-y:  #187818;
+    --ax-z:  #1858b8;
+    --ax-b:  #b06010;
+    --ax-c:  #7030a8;
+    --ax-e:  #186880;
+
+    --accent:     #1a5fa8;
+    --accent-hi:  #2878d0;
+    --accent-dim: rgba(26,95,168,0.12);
+    --green:  #1a7838;
+    --red:    #b82020;
+    --amber:  #a06010;
+    --teal:   #187868;
+
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  html, body {
+    height: 100%; overflow: hidden;
+    background: var(--ui-bg1); color: var(--text0);
+    font-family: var(--sans); font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #app { display: grid; grid-template-rows: 46px 1fr; height: 100vh; }
+
+  /* ── Titlebar ── */
+  #header {
+    background: var(--ui-bg1);
+    border-bottom: 2px solid var(--border-hi);
+    display: flex; align-items: center; gap: 0;
+    padding: 0; flex-shrink: 0;
+  }
+  .logo-block {
+    background: var(--accent);
+    height: 100%; padding: 0 28px 0 14px;
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    letter-spacing: 0.15em; color: #fff; flex-shrink: 0;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 100%, 0 100%);
+  }
+  .logo-block span { opacity: 0.7; font-weight: 400; }
+
+  .tb-group {
+    display: flex; align-items: center; gap: 2px;
+    border-right: 1px solid var(--border);
+    padding: 0 8px; height: 100%;
+  }
+  .tb-btn {
+    background: transparent; border: 1px solid transparent;
+    color: var(--text1); font-family: var(--mono); font-size: 11px;
+    padding: 0 10px; height: 30px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    border-radius: 2px; letter-spacing: 0.04em;
+    transition: background 0.1s, border-color 0.1s; white-space: nowrap;
+  }
+  .tb-btn:hover { background: var(--ui-bg3); border-color: var(--border); color: var(--text0); }
+  .tb-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+  .tb-btn.danger { color: var(--red); }
+  .tb-btn.danger:hover { background: rgba(184,32,32,0.08); border-color: #cc6060; }
+  .tb-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent-hi); }
+  .tb-btn.primary:hover { background: var(--accent-hi); }
+
+  .tb-select {
+    background: #fff; border: 1px solid var(--border);
+    color: var(--text0); font-family: var(--mono); font-size: 11px;
+    padding: 4px 8px; border-radius: 2px; cursor: pointer; height: 28px;
+  }
+  .tb-select:focus { outline: 1px solid var(--accent); }
+  .tb-num {
+    background: #fff; border: 1px solid var(--border);
+    color: var(--text0); font-family: var(--mono); font-size: 11px;
+    padding: 4px 6px; border-radius: 2px; width: 54px; text-align: right; height: 28px;
+  }
+  .tb-label { font-family: var(--mono); font-size: 10px; color: var(--text2); letter-spacing: 0.06em; }
+  .tb-spacer { flex: 1; }
+  #tb-status { font-family: var(--mono); font-size: 11px; color: var(--amber); padding: 0 10px; }
+  #tb-fname  { font-family: var(--mono); font-size: 11px; color: var(--text1); padding: 0 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .chip-group { display: flex; gap: 2px; align-items: center; }
+  .chip {
+    display: flex; align-items: center; gap: 5px;
+    background: var(--ui-bg0); border: 1px solid var(--border);
+    padding: 3px 9px; cursor: pointer;
+    font-family: var(--mono); font-size: 10px; color: var(--text2);
+    letter-spacing: 0.06em; transition: all 0.1s; border-radius: 2px;
+    user-select: none; height: 26px;
+  }
+  .chip input { display: none; }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .chip.on { background: var(--ui-bg2); border-color: var(--border-hi); color: var(--text0); }
+
+  /* ── Body ── */
+  #body { display: grid; grid-template-columns: 196px 1fr 228px; overflow: hidden; }
+
+  /* ── Left jog panel ── */
+  #jog-panel {
+    background: var(--ui-bg0);
+    border-right: 2px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .jp-header {
+    background: var(--ui-bg1); border-bottom: 1px solid var(--border);
+    padding: 6px 12px; font-family: var(--mono); font-size: 10px;
+    color: var(--text2); letter-spacing: 0.12em; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .jp-status { font-size: 10px; font-weight: 700; }
+  .jog-axis { padding: 10px 12px; border-bottom: 1px solid var(--border-lt); }
+  .jog-axis-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .jog-axis-name { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .jog-axis-val {
+    font-family: var(--mono); font-size: 12px; color: var(--text0);
+    background: #fff; border: 1px solid var(--border);
+    padding: 2px 8px; min-width: 72px; text-align: right;
+  }
+  .jog-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 5px; border-radius: 0;
+    outline: none; cursor: pointer; margin-bottom: 4px;
+    background: var(--ui-bg2); border: 1px solid var(--border);
+  }
+  .jog-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 22px;
+    border-radius: 2px; cursor: pointer; border: 1px solid rgba(0,0,0,0.25);
+  }
+  .jog-range-labels {
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 9px; color: var(--text2);
+  }
+  #jog-home-btn {
+    margin: 10px 12px; width: calc(100% - 24px);
+    background: var(--ui-bg1); border: 1px solid var(--border);
+    color: var(--text1); font-family: var(--mono); font-size: 11px;
+    padding: 7px; cursor: pointer; letter-spacing: 0.08em; border-radius: 2px;
+  }
+  #jog-home-btn:hover { background: var(--ui-bg2); color: var(--text0); }
+  .jp-disabled { opacity: 0.3; pointer-events: none; }
+
+  /* ── Canvas ── */
+  #canvas-col { display: flex; flex-direction: column; background: var(--vp-bg); overflow: hidden; }
+  #cv-wrap { flex: 1; position: relative; overflow: hidden; }
+  #cv { display: block; width: 100%; height: 100%; }
+  #corner-tl {
+    position: absolute; top: 12px; left: 14px;
+    font-family: var(--mono); font-size: 10px; color: rgba(0,0,0,0.35);
+    pointer-events: none; line-height: 2; letter-spacing: 0.04em;
+  }
+  #corner-br {
+    position: absolute; bottom: 12px; right: 14px;
+    font-family: var(--mono); font-size: 10px; color: rgba(0,0,0,0.4);
+    pointer-events: none; text-align: right;
+  }
+
+  /* ── Timeline ── */
+  #progress-area {
+    background: var(--ui-bg1); border-top: 2px solid var(--border);
+    padding: 7px 14px 9px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+  }
+  .prog-meta { display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 10px; }
+  .prog-meta .label { color: var(--text2); letter-spacing: 0.1em; }
+  .prog-meta .val   { color: var(--accent); font-weight: 700; font-size: 12px; }
+  .prog-meta .move-info { color: var(--text2); margin-left: auto; }
+
+  #prog {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 5px; background: var(--ui-bg3);
+    border: 1px solid var(--border); border-radius: 0; outline: none; cursor: pointer;
+  }
+  #prog::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 2px;
+    background: var(--accent); cursor: pointer; border: 1px solid var(--accent-hi);
+  }
+  #prog::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 2px;
+    background: var(--accent); border: 1px solid var(--accent-hi); cursor: pointer;
+  }
+  .prog-track { position: relative; }
+  #prog-fill {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    left: 0; height: 5px; background: var(--accent); pointer-events: none;
+  }
+
+  .pb-row { display: flex; align-items: center; gap: 5px; }
+  .pb-btn {
+    background: var(--ui-bg0); border: 1px solid var(--border);
+    color: var(--text1); cursor: pointer; font-size: 13px;
+    width: 30px; height: 26px; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.1s;
+  }
+  .pb-btn:hover { background: var(--ui-bg2); color: var(--text0); border-color: var(--border-hi); }
+  .pb-btn.play-active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  #pb-speed {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 4px; background: var(--ui-bg3);
+    border: 1px solid var(--border); border-radius: 0; outline: none; cursor: pointer;
+  }
+  #pb-speed::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 10px; height: 18px; border-radius: 2px;
+    background: var(--ui-bg1); cursor: pointer; border: 1px solid var(--border-hi);
+  }
+  .pb-spd-label { font-family: var(--mono); font-size: 10px; color: var(--text2); }
+  .pb-spd-val   { font-family: var(--mono); font-size: 10px; color: var(--text1); min-width: 32px; text-align: right; }
+
+  /* ── Collision report panel (right sidebar bottom) ── */
+  #coll-report-panel {
+    flex-shrink: 0;
+    border-top: 2px solid var(--border);
+    transition: border-color 0.25s, background 0.25s;
+  }
+  #coll-report-panel.alert {
+    border-top-color: var(--red);
+    background: #fff5f5;
+    animation: coll-flash 0.5s ease-out;
+  }
+  @keyframes coll-flash {
+    0%   { background: #ffd0d0; }
+    100% { background: #fff5f5; }
+  }
+  #coll-report-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 12px; background: var(--ui-bg1);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 10px; color: var(--text2);
+    letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600;
+    transition: background 0.25s, color 0.25s;
+  }
+  #coll-report-panel.alert #coll-report-head {
+    background: #fdecea; color: var(--red);
+  }
+  #coll-report-badge {
+    font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 2px;
+    background: var(--ui-bg2); color: var(--text2);
+    transition: background 0.25s, color 0.25s;
+    letter-spacing: 0.08em;
+  }
+  #coll-report-panel.alert #coll-report-badge {
+    background: var(--red); color: #fff;
+  }
+  #coll-report {
+    padding: 6px 12px; font-family: var(--mono); font-size: 10px;
+    line-height: 1.9; max-height: 120px; overflow-y: auto; color: var(--text2);
+  }
+  #coll-report .coll-item {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--red); padding: 1px 0;
+  }
+  #coll-report .coll-item::before {
+    content: '!'; font-weight: 700; font-size: 10px;
+    background: var(--red); color: #fff;
+    width: 14px; height: 14px; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  #coll-report .limit-item {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--amber); padding: 1px 0;
+  }
+  #coll-report .limit-item::before {
+    content: '⚠'; font-size: 10px; flex-shrink: 0;
+  }
+  #coll-report .ok-msg { color: var(--green); }
+
+  /* ── Update banner ── */
+  #update-banner {
+    display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 9000;
+    background: var(--accent); color: #fff;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+    padding: 8px 16px; display: none;
+    align-items: center; justify-content: space-between; gap: 12px;
+    border-top: 2px solid var(--accent-hi);
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.25);
+  }
+  #update-banner.visible { display: flex; }
+  #update-banner .ub-msg { display: flex; align-items: center; gap: 8px; }
+  #update-banner .ub-dot { width: 7px; height: 7px; border-radius: 50%; background: #7ef; flex-shrink: 0; animation: ub-pulse 1.4s ease-in-out infinite; }
+  @keyframes ub-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  #update-banner .ub-btns { display: flex; gap: 8px; flex-shrink: 0; }
+  #update-banner .ub-reload {
+    background: #fff; color: var(--accent); border: none;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    padding: 5px 14px; cursor: pointer; letter-spacing: 0.08em; border-radius: 2px;
+  }
+  #update-banner .ub-reload:hover { background: #e8f0ff; }
+  #update-banner .ub-dismiss {
+    background: transparent; color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.3);
+    font-family: var(--mono); font-size: 11px;
+    padding: 5px 10px; cursor: pointer; letter-spacing: 0.08em; border-radius: 2px;
+  }
+  #update-banner .ub-dismiss:hover { color: #fff; border-color: rgba(255,255,255,0.6); }
+
+  /* ── Right panel ── */
+  #right-panel {
+    background: var(--ui-bg0); border-left: 2px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .ps { border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .ps-head {
+    background: var(--ui-bg1); padding: 5px 12px;
+    font-family: var(--mono); font-size: 10px; color: var(--text2);
+    letter-spacing: 0.12em; text-transform: uppercase; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  .ps-body { padding: 8px 12px; }
+
+  .ax-row { display: grid; grid-template-columns: 18px 1fr 72px; align-items: center; gap: 6px; padding: 3px 0; }
+  .ax-lbl { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .ax-bar-wrap { height: 5px; background: var(--ui-bg2); border-radius: 0; overflow: hidden; border: 1px solid var(--border); }
+  .ax-bar { height: 100%; border-radius: 0; transition: width 0.1s; }
+  .ax-num { font-family: var(--mono); font-size: 11px; text-align: right; color: var(--text0); }
+
+  #type-badge {
+    margin-top: 7px; display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 10px; color: var(--text1);
+    background: var(--ui-bg1); border: 1px solid var(--border);
+    padding: 3px 9px; letter-spacing: 0.06em;
+  }
+  #type-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  .st-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 0; border-bottom: 1px solid var(--border-lt);
+  }
+  .st-row:last-child { border-bottom: none; }
+  .st-k { font-size: 11px; color: var(--text1); display: flex; align-items: center; gap: 6px; }
+  .st-k .dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .st-v { font-family: var(--mono); font-size: 11px; color: var(--text0); font-weight: 600; }
+
+  #gcode-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; border-bottom: none; }
+  #gcode-ctx {
+    flex: 1; overflow-y: auto; font-family: var(--mono); font-size: 10px;
+    line-height: 2; scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    padding: 2px 0; background: #fff;
+  }
+  #gcode-ctx::-webkit-scrollbar { width: 4px; }
+  #gcode-ctx::-webkit-scrollbar-thumb { background: var(--border); }
+  .gc-line { display: flex; gap: 6px; padding: 0 12px; }
+  .gc-line.current { background: #ddeeff; border-left: 3px solid var(--accent); }
+  .gc-ln { color: var(--text3); min-width: 28px; text-align: right; flex-shrink: 0; }
+  .gc-code { color: var(--text1); }
+  .gc-line.current .gc-code { color: var(--text0); }
+  .gc-cmd { color: #a06000; font-weight: 600; }
+  .gc-axis { color: #1858b8; }
+  .gc-comment { color: var(--text3); font-style: italic; }
+
+  /* ── Modals ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+
+  /* Collision modal — floating, no backdrop, pointer-events pass through */
+  /* ── Collision panel: fixed left-side drawer ── */
+  /* ── Collision panel: fixed left side drawer ── */
+  #coll-overlay {
+    position: fixed;
+    top: 36px; left: 196px; bottom: 0;
+    width: 360px;
+    overflow: hidden;
+    background: var(--ui-bg0);
+    border-right: 2px solid var(--accent);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.2);
+    z-index: 200;
+    pointer-events: none;
+    display: flex; flex-direction: column;
+    transform: translateX(calc(-100% - 196px));
+    transition: transform 0.22s cubic-bezier(0.32,0.72,0,1);
+    visibility: hidden;
+  }
+  #coll-overlay.open { transform: translateX(0); pointer-events: all; visibility: visible; }
+  #coll-modal {
+    display: flex; flex-direction: column;
+    flex: 1; min-height: 0;
+    position: static;
+    width: 100%; max-width: 100%; max-height: none;
+    border: none; box-shadow: none; border-top: none;
+    overflow: hidden;
+  }
+  #coll-modal .modal-head { cursor: default; flex-wrap: wrap; gap: 4px; padding: 8px 10px; }
+  #coll-modal .modal-head .title { font-size: 10px; }
+  #coll-modal .modal-head > div { flex-wrap: wrap; gap: 6px; width: 100%; }
+  #coll-modal .modal-head label { font-size: 10px !important; flex-shrink: 1; }
+  #coll-list { overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
+  /* Force all coll panel children to respect panel width */
+  #coll-modal * { max-width: 100%; box-sizing: border-box; }
+  #coll-modal .modal-head > div { width: 100%; }
+  #coll-selected-part { white-space: normal; word-break: break-word; }
+  #coll-groups-bar { overflow: hidden; }
+  #coll-footer { flex-wrap: wrap; gap: 5px; padding: 7px 8px; }
+  #coll-footer .h-btn { flex: 1 1 calc(50% - 5px); text-align: center; font-size: 9px; padding: 5px 3px; white-space: nowrap; }
+  #coll-status { font-size: 9px; padding: 5px 10px; }
+  .modal-box {
+    background: var(--ui-bg0); border: 1px solid var(--border-hi);
+    border-top: 3px solid var(--accent);
+    width: 440px; max-height: 85vh; overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  }
+  .modal-box.wide { width: 580px; }
+
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--ui-bg1);
+  }
+  .modal-head .title { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--text0); }
+  .modal-head .close-btn { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 18px; }
+  .modal-section { padding: 14px 16px; border-bottom: 1px solid var(--border-lt); }
+  .modal-section:last-child { border-bottom: none; }
+  .modal-section-title { font-family: var(--mono); font-size: 10px; color: var(--text2); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 10px; font-weight: 600; }
+  .s-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .s-row:last-child { margin-bottom: 0; }
+  .s-label { font-size: 12px; color: var(--text1); }
+  .s-hint { font-size: 10px; color: var(--text2); margin-top: 2px; margin-bottom: 7px; line-height: 1.6; }
+  .s-input {
+    background: #fff; border: 1px solid var(--border);
+    color: var(--text0); font-family: var(--mono); font-size: 12px;
+    padding: 5px 7px; border-radius: 0; width: 88px; text-align: right;
+  }
+  .s-input:focus { outline: 2px solid var(--accent); }
+  .s-color { width: 30px; height: 26px; padding: 2px; border-radius: 0; border: 1px solid var(--border); background: #fff; cursor: pointer; }
+  .s-apply {
+    width: 100%; padding: 9px; background: var(--accent); border: none;
+    color: #fff; font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+    cursor: pointer; font-weight: 600;
+  }
+  .s-apply:hover { background: var(--accent-hi); }
+
+  .s-chip {
+    display: flex; align-items: center; gap: 5px;
+    background: var(--ui-bg1); border: 1px solid var(--border);
+    padding: 4px 10px; cursor: pointer; font-family: var(--mono); font-size: 10px;
+    color: var(--text2); letter-spacing: 0.05em; user-select: none; border-radius: 2px;
+  }
+  .s-chip input { display: none; }
+  .s-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .s-chip.on { background: var(--ui-bg2); border-color: var(--border-hi); color: var(--text0); }
+
+  /* Collision modal */
+  /* Collision proxy row — two-line card layout */
+  .coll-proxy {
+    display: flex; flex-direction: column;
+    gap: 3px; padding: 5px 8px;
+    border-bottom: 1px solid var(--border-lt);
+    cursor: pointer; box-sizing: border-box;
+    width: 100%; overflow: hidden;
+  }
+  .coll-proxy:hover { background: var(--ui-bg1); }
+  .coll-proxy-row1 { display: flex; gap: 3px; align-items: center; width: 100%; min-width: 0; overflow: hidden; }
+  .coll-proxy-row2 { display: flex; gap: 2px; align-items: center; width: 100%; min-width: 0; overflow: hidden; }
+  .coll-proxy input, .coll-proxy select {
+    background: #fff; border: 1px solid var(--border);
+    color: var(--text0); font-family: var(--mono); font-size: 10px;
+    padding: 2px 3px; border-radius: 0; box-sizing: border-box;
+  }
+  .cp-part  { flex: 1; min-width: 0; max-width: 120px; font-size: 10px; }
+  .cp-group { font-family: var(--mono); font-size: 9px; color: var(--cyan); white-space: nowrap; padding: 0 3px; flex-shrink: 0; }
+  .cp-type  { width: 58px; flex-shrink: 0; font-size: 10px; }
+  .cp-num   { width: 36px; flex-shrink: 0; text-align: right; min-width: 0; }
+  .cp-off   { flex: 1; min-width: 0; font-size: 9px; max-width: 90px; }
+  .coll-proxy .del-btn {
+    background: none; border: none; color: var(--text2);
+    cursor: pointer; font-size: 14px; padding: 0 2px; flex-shrink: 0;
+    line-height: 1;
+  }
+  .coll-proxy .del-btn:hover { color: var(--red); }
+  .coll-size-label { font-family: var(--mono); font-size: 9px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+  #coll-groups-bar select { font-size: 9px !important; padding: 1px 2px !important; max-width: 44px; }
+  #coll-groups-bar span { font-size: 9px !important; }
+  #coll-footer { padding: 7px 8px; border-top: 1px solid var(--border); display: flex; gap: 5px; flex-wrap: wrap; background: var(--ui-bg1); }
+  .coll-header-row { display: none; }
+  #coll-status { font-size: 10px; font-family: var(--mono); padding: 6px 12px; color: var(--text2); border-top: 1px solid var(--border-lt); min-height: 24px; background: var(--ui-bg1); }
+
+  .s-mach-op {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 4px; background: var(--ui-bg2);
+    border-radius: 0; outline: none; cursor: pointer; border: 1px solid var(--border);
+  }
+  .s-mach-op::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 18px; border-radius: 2px; background: var(--ui-bg1); cursor: pointer; border: 1px solid var(--border-hi); }
+
+  /* ── Mobile — drawer-based UI ── */
+  @media (max-width: 900px) {
+    html, body { overflow: hidden; }
+    #app { grid-template-rows: 40px 1fr; height: 100vh; height: 100dvh; }
+
+    /* Header: only logo + file open + fullscreen */
+    #header { gap: 0; padding: 0; }
+    .logo-block { padding: 0 12px 0 10px; font-size: 11px; flex-shrink:0; }
+    #header .tb-group { display: none; }
+    #header .tb-group:first-of-type { display: flex; padding: 0 6px; }
+    #header .tb-group:last-of-type { display: flex; border-left: 1px solid var(--border); border-right: none; padding: 0 4px; }
+    #header .tb-group:last-of-type #settingsBtn,
+    #header .tb-group:last-of-type #collBtn { display: none; }
+    .tb-spacer { display: none; }
+    #tb-fname { display: none; }
+    #tb-status { display: none; }
+
+    /* Body: canvas fills everything */
+    #body { grid-template-columns: 1fr; overflow: hidden; }
+    #jog-panel  { display: none; }
+    #right-panel { display: none; }
+    #canvas-col { position: relative; }
+    #corner-tl { right: 58px; } /* don't overlap dock */
+
+    /* Timeline — compact, with room for dock */
+    #progress-area { padding: 4px 58px 6px 10px; gap: 3px; }
+    .prog-meta { font-size: 9px; }
+    .prog-meta .val { font-size: 10px; }
+    .pb-btn { width: 28px; height: 24px; font-size: 12px; }
+    .pb-spd-label, .pb-spd-val { font-size: 9px; }
+
+    /* Modals full-width */
+    .modal-box, .modal-box.wide { width: calc(100vw - 24px); max-height: 90vh; }
+
+    /* ── Mobile dock — vertical strip on the right edge ── */
+    #mob-dock {
+      display: flex; flex-direction: column;
+      position: absolute;
+      top: 50%; right: 0; transform: translateY(-50%);
+      background: var(--ui-bg0);
+      border: 1px solid var(--border-hi);
+      border-right: none;
+      border-radius: 10px 0 0 10px;
+      box-shadow: -3px 0 16px rgba(0,0,0,0.2);
+      padding: 4px 0;
+      gap: 0;
+      z-index: 200;
+    }
+    .mob-dock-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px; position: relative;
+      width: 48px; height: 46px;
+      background: transparent; border: none; border-bottom: 1px solid var(--border-lt);
+      cursor: pointer;
+      font-family: var(--mono); font-size: 7px; color: var(--text2);
+      letter-spacing: 0.05em; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .mob-dock-btn:last-of-type { border-bottom: none; }
+    .mob-dock-btn .dicon { font-size: 17px; line-height: 1; }
+    .mob-dock-btn:active, .mob-dock-btn.active {
+      background: var(--accent-dim); color: var(--accent);
+      border-left: 2px solid var(--accent);
+    }
+    .mob-dock-btn.coll-alert { color: var(--red); }
+    .mob-dock-btn.coll-alert.active { background: rgba(184,32,32,0.08); border-left: 2px solid var(--red); }
+    .mob-dock-sep { height: 1px; background: var(--border); margin: 2px 6px; }
+    .mob-alert-dot {
+      display: none; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--red); position: absolute; top: 5px; right: 6px;
+    }
+    .coll-alert .mob-alert-dot { display: block; }
+
+    /* ── No backdrop — panels float alongside canvas ── */
+    #mob-backdrop { display: none; }
+    #mob-backdrop.open { display: none; }
+
+    /* ── Panels slide in from the right ── */
+    .mob-drawer {
+      position: absolute; top: 0; right: 48px; bottom: 0; z-index: 190;
+      width: 220px;
+      background: var(--ui-bg0);
+      border-left: 2px solid var(--accent);
+      border-right: 1px solid var(--border);
+      overflow-y: auto; overflow-x: hidden;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.18);
+      display: none;
+      transform: translateX(100%);
+      transition: transform 0.22s cubic-bezier(0.32,0.72,0,1);
+    }
+    .mob-drawer.open { display: block; transform: translateX(0); }
+    .mob-drawer-handle {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px 7px; border-bottom: 1px solid var(--border);
+      background: var(--ui-bg1);
+      position: sticky; top: 0; z-index: 1;
+    }
+    .mob-drawer-title {
+      font-family: var(--mono); font-size: 10px; font-weight: 700;
+      letter-spacing: 0.12em; color: var(--text0); text-transform: uppercase;
+    }
+    .mob-drawer-close {
+      background: none; border: none; color: var(--text2);
+      font-size: 18px; cursor: pointer; padding: 0 2px; line-height: 1;
+    }
+    .mob-drawer-body { padding: 10px 12px 20px; }
+
+    /* Jog panel */
+    #mob-drawer-jog .jog-axis { padding: 7px 0; border-bottom: 1px solid var(--border-lt); }
+    #mob-drawer-jog .jog-axis:last-of-type { border-bottom: none; }
+    #mob-drawer-jog .jog-axis-name { font-size: 12px; }
+    #mob-drawer-jog .jog-axis-val { font-size: 11px; min-width: 60px; padding: 1px 4px; }
+    #mob-drawer-jog .jog-range-labels { font-size: 8px; }
+    #mob-drawer-jog #jog-home-btn-mob { width: 100%; margin: 10px 0 0 0; padding: 9px; font-size: 11px; }
+
+    /* Axes panel */
+    #mob-drawer-axes .ax-row { grid-template-columns: 16px 1fr 60px; padding: 4px 0; gap: 5px; }
+    #mob-drawer-axes .ax-lbl { font-size: 12px; }
+    #mob-drawer-axes .ax-num { font-size: 11px; }
+
+    /* Info panel */
+    #mob-drawer-info .mob-section-head {
+      font-family: var(--mono); font-size: 9px; color: var(--text2);
+      letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600;
+      padding: 8px 0 4px; border-bottom: 1px solid var(--border); margin-bottom: 3px;
+    }
+    #mob-drawer-info .mob-section-head:first-child { padding-top: 0; }
+    #mob-drawer-info .st-row { padding: 4px 0; }
+    #mob-drawer-info .st-k { font-size: 11px; }
+    #mob-drawer-info .st-v { font-size: 11px; }
+
+    /* Gcode panel */
+    #mob-gcode-ctx {
+      font-size: 9px; max-height: calc(100vh - 160px); overflow-y: auto;
+      background: #fff; border: 1px solid var(--border);
+    }
+
+    /* Display panel */
+    #mob-drawer-display .mob-section-head {
+      font-family: var(--mono); font-size: 9px; color: var(--text2);
+      letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600;
+      padding: 8px 0 5px; border-bottom: 1px solid var(--border); margin-bottom: 7px;
+    }
+    #mob-drawer-display .mob-section-head:first-child { padding-top: 0; }
+    #mob-drawer-display .chip-group { flex-wrap: wrap; gap: 5px; margin-bottom: 4px; }
+    #mob-drawer-display .chip { font-size: 10px; padding: 5px 8px; height: auto; }
+    #mob-drawer-display select { font-size: 12px; height: 30px; width: 100%; margin-top: 5px;
+      background: #fff; border: 1px solid var(--border); padding: 3px 6px; }
+    #mob-drawer-display .mob-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+    #mob-drawer-display .mob-row label { font-size: 12px; color: var(--text1); }
+    #mob-drawer-display input[type=number] { width: 60px; height: 28px; font-size: 12px;
+      background: #fff; border: 1px solid var(--border); padding: 3px 5px; text-align: right;
+      font-family: var(--mono); }
+
+    /* Violations panel */
+    #mob-drawer-coll #mob-coll-report { font-size: 11px; }
+    #mob-drawer-coll .mob-coll-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+    #mob-drawer-coll .mob-coll-actions button {
+      width: 100%; padding: 8px; background: var(--ui-bg1); border: 1px solid var(--border);
+      font-family: var(--mono); font-size: 10px; cursor: pointer; border-radius: 3px; color: var(--text1);
+    }
+  }
+
+
+    /* ── Modals on mobile ── */
+    .modal-overlay { align-items: flex-end; }
+    .modal-box, .modal-box.wide {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      max-height: 88vh;
+      border-radius: 14px 14px 0 0;
+      border-left: none; border-right: none; border-bottom: none;
+      border-top: 3px solid var(--accent);
+    }
+    .modal-head { padding: 10px 14px; }
+    .modal-section { padding: 10px 14px; }
+    .s-input { width: 62px; height: 30px; font-size: 13px; }
+    .s-label { font-size: 13px; }
+    .s-hint { font-size: 11px; }
+
+    /* Settings — axis limits grid: stack label above min/max */
+    #settings-modal .modal-section [style*="grid-template-columns:1fr 80px 80px"] {
+      grid-template-columns: 60px 1fr 1fr !important;
+    }
+    /* Machine geometry grid */
+    #settings-modal .modal-section [style*="grid-template-columns:1fr 52px 80px"] {
+      grid-template-columns: 1fr 44px 72px !important;
+      font-size: 11px;
+    }
+
+    /* Collision modal — header wraps */
+    #coll-modal .modal-head { flex-wrap: wrap; gap: 6px; }
+    #coll-modal .modal-head > div {
+      flex-wrap: wrap; gap: 6px; width: 100%;
+    }
+    #coll-modal .modal-head label { font-size: 12px; }
+
+    /* Collision table: replace multi-column grid with stacked cards */
+    /* coll-proxy now uses two-line card layout — no mobile overrides needed */
+
+    /* Collision footer — wrap buttons */
+    /* coll-footer handled by panel CSS */
+
+    /* Groups bar wraps */
+    #coll-groups-bar { flex-wrap: wrap; gap: 6px; padding: 8px 14px; }
+
+
+    /* ── Collision panel on mobile: left drawer, narrower ── */
+    #coll-overlay {
+      top: 40px !important;
+      left: 0 !important;
+      width: min(300px, 80vw) !important;
+      border-right: 2px solid var(--accent) !important;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.3) !important;
+    }
+
+
+
+  /* Desktop: never show mobile-only elements */
+  @media (min-width: 901px) {
+    #mob-dock, #mob-backdrop, .mob-drawer { display: none !important; }
+  }
+
+  /* Portrait warning overlay */
+  @media (orientation: portrait) and (max-width: 900px) {
+    #portrait-warn { display: flex !important; }
+  }
+</style>
 </head>
 <body>
 <!-- Portrait warning -->
@@ -574,25 +1292,2881 @@
   </div>
 </div>
 
-<!-- Three.js + plugins -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/math/ConvexHull.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/ConvexGeometry.js"></script>
+<script>
+// ── Three.js ──────────────────────────────────────────────────────
+const cv = document.getElementById('cv');
+let renderer, scene, camera, rootGroup;
+let mesh3=null, mesh5=null, lineT=null;
+let rotX=-0.4, rotY=0.4, zoom=1, baseZ=200, panX=0, panY=0;
+let isDrag=false, isRightDrag=false, lastMX=0, lastMY=0;
 
-<!-- App modules (order matters — dependencies first) -->
-<script src="js/three-scene.js"></script>
-<script src="js/scene-objects.js"></script>
-<script src="js/machine.js"></script>
-<script src="js/gcode.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/collision.js"></script>
-<script src="js/jog.js"></script>
-<script src="js/machine-config.js"></script>
-<script src="js/examples.js"></script>
-<script src="js/version.js"></script>
-<script src="js/mobile.js"></script>
-<script src="js/main.js"></script>
+function initThree(){
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45,1,0.01,1e6);
+  camera.position.set(0,0,200);
+  renderer = new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(0xb8bec6, 1);
+  scene.add(new THREE.AmbientLight(0xffffff,0.75));
+  const dl=new THREE.DirectionalLight(0xffffff,0.8); dl.position.set(1,2,1.5); scene.add(dl);
+  const dl2=new THREE.DirectionalLight(0xc8d0d8,0.3); dl2.position.set(-1,-1,-1); scene.add(dl2);
+  rootGroup = new THREE.Group(); scene.add(rootGroup);
+
+  function resize(){
+    const w=cv.parentElement.clientWidth, h=cv.parentElement.clientHeight;
+    renderer.setSize(w,h,false);
+    camera.aspect=w/h; camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(cv.parentElement);
+  resize();
+
+  (function loop(){
+    requestAnimationFrame(loop);
+    rootGroup.rotation.x=rotX; rootGroup.rotation.y=rotY;
+    rootGroup.position.x=panX; rootGroup.position.y=panY;
+    renderer.render(scene,camera);
+  })();
+}
+
+function initStaticSceneLate(){
+  // Called after initThree so scene exists
+  initStaticScene();
+}
+
+const cvWrap = document.getElementById('cv-wrap');
+cvWrap.addEventListener('contextmenu',e=>e.preventDefault());
+cvWrap.addEventListener('mousedown',e=>{
+  if(collConfigOpen){
+    const ax = getGizmoHit(e);
+    if(ax){
+      gizmoDragging=true;
+      gizmoAxis=ax;
+      gizmoPrevEvent={clientX:e.clientX,clientY:e.clientY};
+      const proxy=collProxies.find(p=>p.id===selectedProxyId);
+      if(proxy) gizmoProxyStart={ox:proxy.ox||0,oy:proxy.oy||0,oz:proxy.oz||0};
+      e.preventDefault();
+      return; // don't start orbit
+    }
+  }
+  isDrag=true;isRightDrag=e.button===2;lastMX=e.clientX;lastMY=e.clientY;cv.style.cursor='grabbing';
+});
+window.addEventListener('mouseup',()=>{isDrag=false;cv.style.cursor='grab';});
+window.addEventListener('mousemove',e=>{
+  if(!isDrag) return;
+  const dx=e.clientX-lastMX, dy=e.clientY-lastMY;
+  lastMX=e.clientX; lastMY=e.clientY;
+  if(isRightDrag){panX+=dx*0.15*(baseZ*zoom/200); panY-=dy*0.15*(baseZ*zoom/200);}
+  else{rotY+=dx*0.007; rotX+=dy*0.007;}
+});
+cvWrap.addEventListener('wheel',e=>{
+  zoom*=e.deltaY>0?1.1:0.91; zoom=Math.max(0.02,Math.min(100,zoom));
+  camera.position.z=baseZ*zoom; e.preventDefault();
+},{passive:false});
+
+// ── Touch events ──────────────────────────────────────────────────
+let lastTouchDist=0, lastTouchMidX=0, lastTouchMidY=0, touchMode='';
+
+cvWrap.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  if(e.touches.length===1){
+    touchMode='orbit';
+    lastMX=e.touches[0].clientX; lastMY=e.touches[0].clientY;
+  } else if(e.touches.length===2){
+    touchMode='pinch';
+    const dx=e.touches[0].clientX-e.touches[1].clientX;
+    const dy=e.touches[0].clientY-e.touches[1].clientY;
+    lastTouchDist=Math.sqrt(dx*dx+dy*dy);
+    lastTouchMidX=(e.touches[0].clientX+e.touches[1].clientX)/2;
+    lastTouchMidY=(e.touches[0].clientY+e.touches[1].clientY)/2;
+  }
+},{passive:false});
+
+cvWrap.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if(touchMode==='orbit'&&e.touches.length===1){
+    const dx=e.touches[0].clientX-lastMX, dy=e.touches[0].clientY-lastMY;
+    lastMX=e.touches[0].clientX; lastMY=e.touches[0].clientY;
+    rotY+=dx*0.007; rotX+=dy*0.007;
+  } else if(touchMode==='pinch'&&e.touches.length===2){
+    const dx=e.touches[0].clientX-e.touches[1].clientX;
+    const dy=e.touches[0].clientY-e.touches[1].clientY;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    // Pinch zoom
+    zoom*=lastTouchDist/dist;
+    zoom=Math.max(0.02,Math.min(100,zoom));
+    camera.position.z=baseZ*zoom;
+    lastTouchDist=dist;
+    // Two-finger pan
+    const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;
+    const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;
+    panX+=(midX-lastTouchMidX)*0.15*(baseZ*zoom/200);
+    panY-=(midY-lastTouchMidY)*0.15*(baseZ*zoom/200);
+    lastTouchMidX=midX; lastTouchMidY=midY;
+  }
+},{passive:false});
+
+cvWrap.addEventListener('touchend',e=>{
+  if(e.touches.length===0) touchMode='';
+  else if(e.touches.length===1){
+    touchMode='orbit';
+    lastMX=e.touches[0].clientX; lastMY=e.touches[0].clientY;
+  }
+},{passive:false});
+
+// ── Chip toggles ──────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(chip=>{
+  const cb=chip.querySelector('input');
+  chip.addEventListener('click',()=>{
+    cb.checked=!cb.checked;
+    chip.classList.toggle('on',cb.checked);
+  });
+});
+
+// ── Static scene objects ──────────────────────────────────────────
+let buildplateMesh=null, nozzleMesh=null;
+const staticGroup=new THREE.Group(); // nozzle lives here — never gets bed rotation
+const bedGroup=new THREE.Group();    // buildplate + toolpath meshes; gets B/C in machine frame
+
+// Build or rebuild buildplate
+function buildBuildplate(){
+  if(buildplateMesh){ bedGroup.remove(buildplateMesh); buildplateMesh.geometry.dispose(); buildplateMesh.material.dispose(); }
+  const w=parseFloat(document.getElementById('s-bp-w').value)||90;
+  const d=parseFloat(document.getElementById('s-bp-d').value)||90;
+  const t=parseFloat(document.getElementById('s-bp-t').value)||3;
+  const col=document.getElementById('s-bp-col').value;
+  const vis=document.getElementById('s-bp-vis').checked;
+  const geo=new THREE.BoxGeometry(w,t,d);
+  const mat=new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.55});
+  buildplateMesh=new THREE.Mesh(geo,mat);
+  buildplateMesh.position.set(0,-t/2,0);
+  buildplateMesh.visible=vis;
+  bedGroup.add(buildplateMesh);
+
+  // Grid lines on top surface
+  const existing=bedGroup.getObjectByName('bp-grid'); if(existing) bedGroup.remove(existing);
+  const gridGrp=new THREE.Group(); gridGrp.name='bp-grid';
+  const lineMat=new THREE.LineBasicMaterial({color:0x88a0b8,transparent:true,opacity:0.4});
+  const step=10;
+  for(let xi=-w/2;xi<=w/2+0.01;xi+=step){
+    const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(xi,0,-d/2),new THREE.Vector3(xi,0,d/2)]);
+    gridGrp.add(new THREE.Line(g,lineMat));
+  }
+  for(let zi=-d/2;zi<=d/2+0.01;zi+=step){
+    const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-w/2,0,zi),new THREE.Vector3(w/2,0,zi)]);
+    gridGrp.add(new THREE.Line(g,lineMat));
+  }
+  const bpts=[new THREE.Vector3(-w/2,0,-d/2),new THREE.Vector3(w/2,0,-d/2),new THREE.Vector3(w/2,0,d/2),new THREE.Vector3(-w/2,0,d/2),new THREE.Vector3(-w/2,0,-d/2)];
+  const bg=new THREE.BufferGeometry().setFromPoints(bpts);
+  gridGrp.add(new THREE.Line(bg,new THREE.LineBasicMaterial({color:0x3a6090,transparent:true,opacity:0.7})));
+  gridGrp.visible=vis;
+  bedGroup.add(gridGrp);
+}
+
+// Build or rebuild nozzle cone. Tip points down, shaft extends upward.
+function buildNozzle(){
+  if(nozzleMesh){ staticGroup.remove(nozzleMesh); nozzleMesh.traverse(c=>{if(c.geometry)c.geometry.dispose();if(c.material)c.material.dispose();}); }
+  const tipR  = parseFloat(document.getElementById('s-nz-tip').value)/2  || 0.4;
+  const baseR = parseFloat(document.getElementById('s-nz-base').value)/2 || 4;
+  const angDeg= parseFloat(document.getElementById('s-nz-ang').value)    || 45;
+  const shaftL= parseFloat(document.getElementById('s-nz-len').value)    || 10;
+  const col   = document.getElementById('s-nz-col').value;
+  const vis   = document.getElementById('s-nz-vis').checked;
+
+  const angRad = angDeg * Math.PI / 180;
+  const coneH  = (baseR - tipR) / Math.tan(angRad);
+
+  const mat = new THREE.MeshLambertMaterial({color:col, transparent:true, opacity:0.8, side:THREE.DoubleSide});
+
+  // Cone: tip at bottom (radiusTop=tipR, radiusBottom=baseR so THREE cylinder goes top→bottom)
+  // We want tip pointing DOWN (-Y). CylinderGeometry goes along Y.
+  // radiusTop = tipR (will be at +Y = top = upward), radiusBottom = baseR (at -Y = downward toward bed)
+  // Then we flip it 180° so tip faces down.
+  const coneGeo  = new THREE.CylinderGeometry(tipR, baseR, coneH, 24, 1);
+  const coneMesh = new THREE.Mesh(coneGeo, mat);
+  // Flip 180° around X so tip (-Y end = tipR end) now points down
+  coneMesh.rotation.x = Math.PI;
+  // After flip the cone occupies y: -coneH/2 to +coneH/2 relative to its own origin
+  // We want tip at y=0 (nozzle tip at move position), so shift up by coneH/2
+  coneMesh.position.y = coneH / 2;
+
+  // Shaft cylinder: sits on top of cone base, extends upward
+  const shaftGeo  = new THREE.CylinderGeometry(baseR, baseR, shaftL, 24, 1);
+  const shaftMesh = new THREE.Mesh(shaftGeo, mat);
+  // Bottom of shaft at y = coneH, center at y = coneH + shaftL/2
+  shaftMesh.position.y = coneH + shaftL / 2;
+
+  nozzleMesh = new THREE.Group();
+  nozzleMesh.add(coneMesh);
+  nozzleMesh.add(shaftMesh);
+  nozzleMesh.visible = vis;
+  nozzleMesh.userData.height = coneH + shaftL;
+  staticGroup.add(nozzleMesh);
+}
+
+// Canonical bed quaternion for machine frame (bed tilts away from nozzle)
+function calcBedQuat(bRad, cRad){
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad);
+  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0), cRad);
+  return new THREE.Quaternion().copy(qB).multiply(qC);
+}
+
+// Part frame nozzle: same as calcBedQuat but C flipped
+function calcNozzlePartQuat(bRad, cRad){
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1), -bRad);
+  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0),  cRad);
+  return new THREE.Quaternion().copy(qB).multiply(qC);
+}
+
+// Nozzle quaternion for part frame (inverse of toPart rotation)
+function calcNozzleQuat(bRad, cRad){
+  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1), -bRad);
+  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0),  cRad); // +cRad matches toPart's -c
+  return new THREE.Quaternion().copy(qB).multiply(qC).conjugate();
+}
+
+// Apply B/C rotation and Z translation to bedGroup in machine frame
+function updateBedRotation(moveIdx){
+  const usePart = document.getElementById('viewMode').value==='part';
+  if(usePart || !allMoves.length || moveIdx===0){
+    bedGroup.quaternion.set(0,0,0,1);
+    bedGroup.position.set(0,0,0);
+    return;
+  }
+  const m = allMoves[Math.min(moveIdx-1, allMoves.length-1)];
+  bedGroup.quaternion.copy(calcBedQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
+  bedGroup.position.set(0, -m.mz, 0); // Z moves bed down, same as machine model
+}
+
+// Update nozzle position to current move's world coords
+function updateNozzlePosition(moveIdx){
+  if(!nozzleMesh) return;
+  if(!allMoves.length||moveIdx===0){
+    nozzleMesh.position.set(0,0,0);
+    nozzleMesh.quaternion.set(0,0,0,1);
+    return;
+  }
+  const m=allMoves[Math.min(moveIdx-1,allMoves.length-1)];
+  const usePart=document.getElementById('viewMode').value==='part';
+
+  if(usePart){
+    const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
+    nozzleMesh.position.set(wx,wz,-wy);
+    nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
+  } else {
+    nozzleMesh.position.set(m.mx, 0, -m.my);
+    nozzleMesh.quaternion.set(0,0,0,1);
+  }
+}
+
+function initStaticScene(){
+  rootGroup.add(staticGroup);
+  rootGroup.add(bedGroup);
+  buildBuildplate();
+  buildNozzle();
+}
+
+// ── Machine STL loader ────────────────────────────────────────────
+const MACHINES_API = 'https://api.github.com/repos/Koaladeen/5-axis-3D-print-G-code-simulator/contents/Machines';
+const MACHINES_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-print-G-code-simulator/main/Machines';
+const MACHINE_PARTS = ['Frame','Z','B','C','Y','X'];
+
+const machineGroup = new THREE.Group();
+const mGrp = {};
+let machineLoaded = false;
+let currentMachineName = '';
+
+const machMat = (part) => {
+  const op  = parseFloat(document.getElementById(`mc-${part}-op`)?.value  ?? 1);
+  const col = document.getElementById(`mc-${part}-col`)?.value ?? '#5577aa';
+  return new THREE.MeshLambertMaterial({color:col, transparent:op<1, opacity:op, side:THREE.DoubleSide});
+};
+
+// Fetch machine folder list from GitHub API
+async function fetchMachineList(){
+  try{
+    const res = await fetch(MACHINES_API);
+    if(!res.ok) throw new Error('API '+res.status);
+    const items = await res.json();
+    const sel = document.getElementById('machineSelect');
+    items
+      .filter(i=>i.type==='dir')
+      .forEach(i=>{
+        const opt=document.createElement('option');
+        opt.value=i.name;
+        opt.textContent=i.name;
+        sel.appendChild(opt);
+      });
+  } catch(e){
+    console.info('Machine list unavailable (works on GitHub Pages):', e.message);
+  }
+}
+
+function disposeMachine(){
+  Object.values(mGrp).forEach(g=>{
+    g.traverse(c=>{if(c.isMesh){c.geometry.dispose();c.material.dispose();}});
+    if(g.parent) g.parent.remove(g);
+  });
+  Object.keys(mGrp).forEach(k=>delete mGrp[k]);
+  if(machineGroup.parent) machineGroup.clear();
+  machineLoaded=false;
+  currentMachineName='';
+}
+
+async function loadMachine(machineName){
+  if(!machineName) return;
+  if(machineName===currentMachineName && machineLoaded) {
+    machineGroup.visible=true; return;
+  }
+  disposeMachine();
+  document.getElementById('tb-status').textContent='loading machine…';
+
+  // Bed side: Frame > Z > B > C (C IS the bed)
+  mGrp.Frame = new THREE.Group(); machineGroup.add(mGrp.Frame);
+  mGrp.Z     = new THREE.Group(); machineGroup.add(mGrp.Z);
+  mGrp.B     = new THREE.Group(); mGrp.Z.add(mGrp.B);
+  mGrp.C     = new THREE.Group(); mGrp.B.add(mGrp.C);
+  // Toolhead side: Y moves under machine root, X under Y
+  mGrp.Y = new THREE.Group(); machineGroup.add(mGrp.Y);
+  mGrp.X = new THREE.Group(); mGrp.Y.add(mGrp.X);
+
+  if(!machineGroup.parent) rootGroup.add(machineGroup);
+  machineGroup.rotation.set(0, 0, 0);
+  machineGroup.visible=true;
+
+  const loader = new THREE.STLLoader();
+  const base = `${MACHINES_RAW}/${encodeURIComponent(machineName)}`;
+  let loaded=0;
+
+  const promises = MACHINE_PARTS.map(name=>new Promise(resolve=>{
+    loader.load(
+      `${base}/${name}.stl`,
+      geo=>{
+        const mesh=new THREE.Mesh(geo, machMat(name));
+        mesh.rotation.x=-Math.PI/2;
+        mGrp[name].add(mesh);
+        loaded++;
+        document.getElementById('tb-status').textContent=`loading machine… ${loaded}/${MACHINE_PARTS.length}`;
+        resolve();
+      },
+      null,
+      ()=>resolve()
+    );
+  }));
+
+  await Promise.all(promises);
+  machineLoaded=true;
+  currentMachineName=machineName;
+  document.getElementById('tb-status').textContent='';
+  setSimpleSceneVisible(false);
+  // Reset to start position
+  document.getElementById('prog').value=0;
+  applyProgress(0);
+  goHome();
+  // Try to load machine.json for this machine (settings + proxies)
+  let collisionLoadedFromMachineJson = false;
+  try{
+    const mr = await fetch(`${MACHINES_RAW}/${encodeURIComponent(machineName)}/machine.json`);
+    if(mr.ok){
+      const cfg = await mr.json();
+      applyMachineConfig(cfg);
+      collisionLoadedFromMachineJson = collProxies.length > 0;
+      document.getElementById('coll-status').textContent =
+        `Auto-loaded settings from machine.json (${collProxies.length} proxies)`;
+    }
+  }catch(e){}
+
+  // Try to load collision.json — takes precedence over proxies in machine.json
+  try{
+    const cr=await fetch(`${MACHINES_RAW}/${encodeURIComponent(machineName)}/collision.json`);
+    if(cr.ok){
+      const data=await cr.json();
+      collProxies=(data.proxies||[]).map(p=>({...p,id:nextProxyId++}));
+      rebuildProxyWireframes();
+      document.getElementById('coll-status').textContent=`Auto-loaded ${collProxies.length} proxies from collision.json`;
+    } else if(!collisionLoadedFromMachineJson) {
+      // No collision.json and no proxies from machine.json — auto-generate hulls
+      setTimeout(()=>autoGenerateHulls(), 200);
+    }
+  }catch(e){
+    if(!collisionLoadedFromMachineJson) setTimeout(()=>autoGenerateHulls(), 200);
+  }
+  updateMachine(0);
+}
+
+function updateMachine(moveIdx){
+  if(!machineLoaded||!machineGroup.parent) return;
+  machineGroup.visible=document.getElementById('showMach').checked;
+  if(!machineGroup.visible) return;
+
+  let mx=0,my=0,mz=0,mb=0,mc=0;
+  if(allMoves.length && moveIdx>0){
+    const m=allMoves[Math.min(moveIdx-1,allMoves.length-1)];
+    mx=m.mx;my=m.my;mz=m.mz;mb=m.mb;mc=m.mc;
+  }
+
+  // Machine origin offset (corrects STL export origin vs machine zero)
+  const ox=parseFloat(document.getElementById('mc-ox').value)||0;
+  const oy=parseFloat(document.getElementById('mc-oy').value)||0;
+  const oz=parseFloat(document.getElementById('mc-oz').value)||0;
+  machineGroup.position.set(ox, oz, -oy); // apply in Three.js coords
+
+  // Bed side: Z↑, B rotates Y, C IS the bed (rotates on B-local Y)
+  if(mGrp.Z) mGrp.Z.position.set(0, -mz, 0);
+  if(mGrp.B){ mGrp.B.rotation.set(0,0,0); mGrp.B.rotateZ(-mb*Math.PI/180); }
+  if(mGrp.C){ mGrp.C.rotation.set(0,0,0); mGrp.C.rotateY(mc*Math.PI/180); }
+
+  // Toolhead side: Y translates in -Z, X carries toolhead
+  if(mGrp.Y) mGrp.Y.position.set(0, 0, -my);
+  if(mGrp.X) mGrp.X.position.set(mx, 0, 0);
+}
+
+function applyMachineAppearance(){
+  MACHINE_PARTS.forEach(name=>{
+    if(!mGrp[name]) return;
+    const op  = parseFloat(document.getElementById(`mc-${name}-op`)?.value ?? 1);
+    const col = document.getElementById(`mc-${name}-col`)?.value ?? '#5577aa';
+    mGrp[name].traverse(c=>{
+      if(!c.isMesh) return;
+      c.material.color.set(col);
+      c.material.opacity=op;
+      c.material.transparent=op<1;
+      c.material.needsUpdate=true;
+    });
+  });
+}
+
+// Legacy alias
+function setMachineOpacity(val){
+  MACHINE_PARTS.forEach(name=>{
+    if(!mGrp[name]) return;
+    mGrp[name].traverse(c=>{if(c.isMesh){c.material.opacity=val;c.material.transparent=val<1;}});
+  });
+}
+
+// ── Settings modal wiring ─────────────────────────────────────────
+document.getElementById('settingsBtn').addEventListener('click',()=>document.getElementById('settings-overlay').classList.add('open'));
+document.getElementById('settingsClose').addEventListener('click',()=>document.getElementById('settings-overlay').classList.remove('open'));
+document.getElementById('settings-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget) e.currentTarget.classList.remove('open');});
+document.getElementById('s-apply-btn').addEventListener('click',()=>{
+  buildBuildplate();
+  buildNozzle();
+  checkLimits();
+  document.getElementById('settings-overlay').classList.remove('open');
+});
+// Chip toggles inside modal for bp/nz visibility
+['chip-bp','chip-nz'].forEach(id=>{
+  const chip=document.getElementById(id);
+  if(!chip) return;
+  const cb=chip.querySelector('input');
+  chip.addEventListener('click',()=>{ cb.checked=!cb.checked; chip.classList.toggle('on',cb.checked); });
+});
+
+['mc-ox','mc-oy','mc-oz'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>updateMachine(0));
+});
+
+// Per-part machine appearance controls
+document.querySelectorAll('.s-mach-op').forEach(el=>{
+  el.addEventListener('input', ()=>applyMachineAppearance());
+});
+['Frame','Z','B','C','Y','X'].forEach(name=>{
+  const col=document.getElementById(`mc-${name}-col`);
+  if(col) col.addEventListener('input', ()=>applyMachineAppearance());
+});
+
+// ── Data ──────────────────────────────────────────────────────────
+let allMoves=[], cachedText='';
+let cum3=[], cum5=[], cumT=[];
+
+// ── Parser ────────────────────────────────────────────────────────
+function parseGcode(text){
+  const lines=text.split('\n');
+  let x=0,y=0,z=0,b=0,c=0,e=0;
+  let absXYZ=true, absE=false;
+  let layerZ=-Infinity, layerIdx=0;
+  let hotend=null, bed=null, fan=0;
+  const result=[];
+  for(let li=0;li<lines.length;li++){
+    const raw=lines[li].trim();
+    if(!raw||raw[0]===';'||raw[0]==='(') continue;
+    const lu=raw.toUpperCase();
+    if(lu.startsWith('M83')){absE=false;continue;}
+    if(lu.startsWith('M82')){absE=true;continue;}
+    if(lu.startsWith('G90')){absXYZ=true;continue;}
+    if(lu.startsWith('G91')){absXYZ=false;continue;}
+    // Temperatures
+    if(/^M104\b/.test(lu)||/^M109\b/.test(lu)){const sm=lu.match(/S([\d.]+)/);if(sm)hotend=parseFloat(sm[1]);continue;}
+    if(/^M140\b/.test(lu)||/^M190\b/.test(lu)){const sm=lu.match(/S([\d.]+)/);if(sm)bed=parseFloat(sm[1]);continue;}
+    if(/^M106\b/.test(lu)){const sm=lu.match(/S([\d.]+)/);fan=sm?Math.round(parseFloat(sm[1])/2.55):100;continue;}
+    if(/^M107\b/.test(lu)){fan=0;continue;}
+    const isG0=/^G0\b/.test(lu), isG1=/^G1\b/.test(lu);
+    if(!isG0&&!isG1) continue;
+    const px=x,py=y,pz=z,pb=b,pc=c;
+    const xm=lu.match(/X(-?[\d.]+)/),ym=lu.match(/Y(-?[\d.]+)/),zm=lu.match(/Z(-?[\d.]+)/);
+    const bm=lu.match(/B(-?[\d.]+)/),cm=lu.match(/C(-?[\d.]+)/),em=lu.match(/E(-?[\d.]+)/);
+    if(xm) x=absXYZ?parseFloat(xm[1]):x+parseFloat(xm[1]);
+    if(ym) y=absXYZ?parseFloat(ym[1]):y+parseFloat(ym[1]);
+    if(zm) z=absXYZ?parseFloat(zm[1]):z+parseFloat(zm[1]);
+    if(bm) b=parseFloat(bm[1]);
+    if(cm) c=parseFloat(cm[1]);
+    let extruding=false;
+    if(em){const ev=parseFloat(em[1]);if(!absE&&ev>0.0001)extruding=true;if(absE&&ev>e+0.0001)extruding=true;if(absE)e=ev;else e+=parseFloat(em[1]);}
+    if(isG0&&!em) extruding=false;
+    if(z>layerZ+0.001){layerZ=z;layerIdx++;}
+    const is5ax=Math.abs(b)>0.5||Math.abs(c)>0.5;
+    const type=extruding?(is5ax?'e5':'e3'):'travel';
+    const s0=toPart(px,py,pz,pb,pc);
+    const s1=toPart(x,y,z,b,c);
+    const dx2=s1[0]-s0[0],dy2=s1[1]-s0[1],dz2=s1[2]-s0[2];
+    if(dx2*dx2+dy2*dy2+dz2*dz2<1e-8) continue;
+    result.push({type,s0,s1,mx:x,my:y,mz:z,mb:b,mc:c,me:e,layer:layerIdx,lineNum:li+1,rawLine:raw,
+      absXYZ,absE,hotend,bedTemp:bed,fan});
+  }
+  return result;
+}
+
+function toPart(x,y,z,bDeg,cDeg){
+  const b=bDeg*Math.PI/180, c=cDeg*Math.PI/180;
+  const xb=x*Math.cos(-b)+z*Math.sin(-b), yb=y, zb=-x*Math.sin(-b)+z*Math.cos(-b);
+  return [xb*Math.cos(-c)-yb*Math.sin(-c), xb*Math.sin(-c)+yb*Math.cos(-c), zb];
+}
+
+function layerColor(layer,maxLayer){
+  const col=new THREE.Color();
+  col.setHSL(0.66-Math.min(layer/Math.max(maxLayer,1),1)*0.66,1,0.5);
+  return col;
+}
+
+// ── Build meshes ──────────────────────────────────────────────────
+const dummy=new THREE.Object3D();
+
+function buildMeshes(nd){
+  [mesh3,mesh5,lineT].forEach(m=>{if(m){m.geometry?.dispose();m.material?.dispose();bedGroup.remove(m);}});
+  mesh3=mesh5=lineT=null;
+  const ax=bedGroup.getObjectByName('axes'); if(ax) bedGroup.remove(ax);
+
+  const show3=document.getElementById('se').checked;
+  const show5=document.getElementById('s5').checked;
+  const showT=document.getElementById('st').checked;
+  const colorByLayer=document.getElementById('sc').checked;
+  const maxLayer=allMoves.length?Math.max(...allMoves.map(s=>s.layer)):0;
+
+  const segs3=allMoves.filter(s=>s.type==='e3');
+  const segs5=allMoves.filter(s=>s.type==='e5');
+  const segsT=allMoves.filter(s=>s.type==='travel');
+
+  // Cumulative indices
+  let n3=0,n5=0,nT=0;
+  cum3=new Int32Array(allMoves.length+1);
+  cum5=new Int32Array(allMoves.length+1);
+  cumT=new Int32Array(allMoves.length+1);
+  for(let i=0;i<allMoves.length;i++){
+    const t=allMoves[i].type;
+    if(t==='e3')n3++;else if(t==='e5')n5++;else nT++;
+    cum3[i+1]=n3;cum5[i+1]=n5;cumT[i+1]=nT;
+  }
+
+  const r=nd/2;
+  const cylGeo=new THREE.CylinderGeometry(r,r,1,6,1);
+
+  function makeInstanced(segs,color,visible){
+    if(!segs.length||!visible) return null;
+    const mat=new THREE.MeshLambertMaterial({color,vertexColors:colorByLayer});
+    const mesh=new THREE.InstancedMesh(cylGeo,mat,segs.length);
+    const colors=colorByLayer?new Float32Array(segs.length*3):null;
+    for(let i=0;i<segs.length;i++){
+      const [x0,y0,z0]=segs[i].s0,[x1,y1,z1]=segs[i].s1;
+      const v0=new THREE.Vector3(x0,z0,-y0),v1=new THREE.Vector3(x1,z1,-y1);
+      const len=v0.distanceTo(v1);
+      if(len<0.001){mesh.setMatrixAt(i,new THREE.Matrix4());continue;}
+      dummy.position.copy(v0).lerp(v1,0.5);
+      dummy.scale.set(1,len,1);
+      dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),v1.clone().sub(v0).normalize());
+      dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix);
+      if(colorByLayer){const col=layerColor(segs[i].layer,maxLayer);colors[i*3]=col.r;colors[i*3+1]=col.g;colors[i*3+2]=col.b;}
+    }
+    mesh.instanceMatrix.needsUpdate=true;
+    if(colorByLayer) mesh.instanceColor=new THREE.InstancedBufferAttribute(colors,3);
+    mesh.count=0; mesh.userData.fullCount=segs.length;
+    return mesh;
+  }
+
+  mesh3=makeInstanced(segs3,0x3b82f6,show3); if(mesh3) bedGroup.add(mesh3);
+  mesh5=makeInstanced(segs5,0xef4444,show5); if(mesh5) bedGroup.add(mesh5);
+
+  if(showT&&segsT.length){
+    const pts=[];
+    for(const s of segsT){
+      pts.push(new THREE.Vector3(s.s0[0],s.s0[2],-s.s0[1]));
+      pts.push(new THREE.Vector3(s.s1[0],s.s1[2],-s.s1[1]));
+    }
+    const geo=new THREE.BufferGeometry().setFromPoints(pts);
+    lineT=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0xf59e0b,transparent:true,opacity:0.4}));
+    lineT.userData.fullCount=segsT.length;
+    lineT.geometry.setDrawRange(0,0);
+    bedGroup.add(lineT);
+  }
+
+  const axHelper=new THREE.AxesHelper(10); axHelper.name='axes'; bedGroup.add(axHelper);
+
+  // Fit camera using full bounds (use bedGroup + staticGroup together)
+  if(mesh3) mesh3.count=mesh3.userData.fullCount;
+  if(mesh5) mesh5.count=mesh5.userData.fullCount;
+  if(lineT) lineT.geometry.setDrawRange(0,lineT.userData.fullCount*2);
+  const box=new THREE.Box3().setFromObject(rootGroup);
+  if(!box.isEmpty()){
+    const center=box.getCenter(new THREE.Vector3());
+    const size=box.getSize(new THREE.Vector3());
+    rootGroup.position.sub(center); panX=0; panY=0;
+    const maxD=Math.max(size.x,size.y,size.z,1);
+    baseZ=maxD*1.8; zoom=1;
+    camera.position.z=baseZ; camera.near=maxD*0.001; camera.far=maxD*300;
+    camera.updateProjectionMatrix();
+  }
+  if(mesh3) mesh3.count=0;
+  if(mesh5) mesh5.count=0;
+  if(lineT) lineT.geometry.setDrawRange(0,0);
+
+  document.getElementById('c3ax').textContent=segs3.length.toLocaleString();
+  document.getElementById('c5ax').textContent=segs5.length.toLocaleString();
+  document.getElementById('ctrav').textContent=segsT.length.toLocaleString();
+  document.getElementById('ctot').textContent=allMoves.length.toLocaleString();
+  document.getElementById('corner-br').textContent=allMoves.length.toLocaleString()+' moves';
+}
+
+// ── Progress ──────────────────────────────────────────────────────
+function applyProgress(pct){
+  const frac=pct/10000;
+  const moveIdx=Math.floor(allMoves.length*frac);
+  if(mesh3) mesh3.count=cum3[moveIdx];
+  if(mesh5) mesh5.count=cum5[moveIdx];
+  if(lineT) lineT.geometry.setDrawRange(0,cumT[moveIdx]*2);
+
+  const pctStr=Math.round(frac*100)+'%';
+  document.getElementById('progv').textContent=pctStr;
+  document.getElementById('prog-fill').style.width=pctStr;
+  document.getElementById('moveInfo').textContent=moveIdx.toLocaleString()+' / '+(allMoves.length||0).toLocaleString();
+
+  updateReadout(moveIdx);
+  updateNozzlePosition(moveIdx);
+  updateBedRotation(moveIdx);
+  updateMachine(moveIdx);
+  // Update violation panel on every frame (scrub, arrow keys, playback)
+  if(!isPlaying) checkCurrentMove();
+}
+
+// Update axis position bar indicators
+function updateAxisBars(m){
+  if(!m) return;
+  const L = getLimits();
+  const axes = [
+    {key:'x', val:m.mx, min:L.xmin, max:L.xmax},
+    {key:'y', val:m.my, min:L.ymin, max:L.ymax},
+    {key:'z', val:m.mz, min:L.zmin, max:L.zmax},
+    {key:'b', val:m.mb, min:L.bmin, max:L.bmax},
+    {key:'c', val:m.mc, min:-360,   max:360},
+    {key:'e', val:m.me, min:0,       max:Math.max(m.me||1,1)},
+  ];
+  for(const ax of axes){
+    const bar = document.getElementById('ax-bar-'+ax.key);
+    if(!bar) continue;
+    const range = ax.max - ax.min;
+    const pct = range>0 ? Math.max(0,Math.min(100,((ax.val-ax.min)/range)*100)) : 50;
+    bar.style.width = pct+'%';
+  }
+}
+
+const TYPE_LABELS={e3:'3-AXIS EXTRUDE',e5:'5-AXIS EXTRUDE',travel:'TRAVEL'};
+const TYPE_COLORS={e3:'var(--ax-z)',e5:'var(--ax-x)',travel:'var(--ax-b)'};
+
+function updateReadout(moveIdx){
+  if(!allMoves.length||moveIdx===0){
+    ['x','y','z'].forEach(a=>document.getElementById('ax-'+a).textContent='0.000');
+    ['b','c'].forEach(a=>document.getElementById('ax-'+a).textContent='0.0°');
+    document.getElementById('ax-e').textContent='0.000';
+    document.getElementById('type-label').textContent='—';
+    document.getElementById('type-dot').style.background='';
+    ['ps-pos','ps-emode','ps-fan','ps-hotend','ps-bed'].forEach(id=>document.getElementById(id).textContent='—');
+    document.getElementById('gcode-ctx').innerHTML='';
+    return;
+  }
+  const m=allMoves[Math.min(moveIdx-1,allMoves.length-1)];
+  document.getElementById('ax-x').textContent=m.mx.toFixed(3);
+  document.getElementById('ax-y').textContent=m.my.toFixed(3);
+  document.getElementById('ax-z').textContent=m.mz.toFixed(3);
+  document.getElementById('ax-b').textContent=m.mb.toFixed(1)+'°';
+  document.getElementById('ax-c').textContent=m.mc.toFixed(1)+'°';
+  document.getElementById('ax-e').textContent=m.me.toFixed(3);
+  updateAxisBars(m);
+  syncJogFromMove(m);
+  document.getElementById('type-label').textContent=TYPE_LABELS[m.type]||m.type;
+  document.getElementById('type-dot').style.background=TYPE_COLORS[m.type]||'';
+  // Print state
+  document.getElementById('ps-pos').textContent=m.absXYZ?'G90 Absolute':'G91 Relative';
+  document.getElementById('ps-emode').textContent=m.absE?'M82 Absolute':'M83 Relative';
+  document.getElementById('ps-fan').textContent=m.fan!=null?m.fan+'%':'—';
+  document.getElementById('ps-hotend').textContent=m.hotend!=null?m.hotend+'°C':'—';
+  document.getElementById('ps-bed').textContent=m.bedTemp!=null?m.bedTemp+'°C':'—';
+  buildContext(m.lineNum);
+}
+
+function buildContext(centerLine){
+  if(!cachedText) return;
+  const lines=cachedText.split('\n');
+  const start=Math.max(0,centerLine-6), end=Math.min(lines.length-1,centerLine+5);
+  let html='';
+  for(let i=start;i<=end;i++){
+    const cur=i===centerLine-1;
+    const raw=lines[i];
+    // Syntax color: command, axis letters, comments
+    let colored=escHtml(raw);
+    if(!raw.trim().startsWith(';')){
+      colored=colored
+        .replace(/^(\s*)(G\d+|M\d+)/,'$1<span class="gc-cmd">$2</span>')
+        .replace(/\b([XYZEBCF])(-?[\d.]+)/g,'<span class="gc-axis">$1$2</span>')
+        .replace(/(;.*)$/,'<span class="gc-comment">$1</span>');
+    } else {
+      colored='<span class="gc-comment">'+colored+'</span>';
+    }
+    const ln=String(i+1).padStart(4,' ').replace(/ /g,'&nbsp;');
+    html+=`<div class="gc-line${cur?' current':''}"><span class="gc-ln">${ln}</span><span class="gc-code">${colored}</span></div>`;
+  }
+  const ctx=document.getElementById('gcode-ctx');
+  ctx.innerHTML=html;
+  const cur=ctx.querySelector('.current');
+  if(cur) cur.scrollIntoView({block:'nearest'});
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── Rebuild ───────────────────────────────────────────────────────
+function rebuildAll(resetProgress){
+  if(!cachedText) return;
+  document.getElementById('tb-status').textContent='building…';
+  setTimeout(()=>{
+    allMoves=parseGcode(cachedText);
+    buildMeshes(parseFloat(document.getElementById('nozzle').value)||0.4);
+    // Always start at beginning of gcode
+    document.getElementById('prog').value=0;
+    applyProgress(0);
+    checkLimits();
+    // Clear live violation state for the new file
+    _lastLimStr=''; _lastCollStr='';
+    _limitViolations=[]; _collisionViolations=[];
+    clearAllPartColliding();
+    clearPrintHull();
+    renderViolationPanel();
+    document.getElementById('tb-status').textContent='';
+    // Home the machine
+    goHome();
+  },10);
+}
+
+// ── Unified violation state (collisions + limits) ─────────────────
+// Both checkLimits() and checkCollisions() write here; panel updates atomically.
+let _limitViolations   = []; // strings
+let _collisionViolations = []; // strings
+
+function renderViolationPanel(){
+  const panel = document.getElementById('coll-report-panel');
+  const badge = document.getElementById('coll-report-badge');
+  const report = document.getElementById('coll-report');
+
+  const hasCollisions = _collisionViolations.length > 0;
+  const hasLimits     = _limitViolations.length > 0;
+  const hasAny        = hasCollisions || hasLimits;
+
+  panel.classList.toggle('alert', hasAny);
+  badge.textContent = hasAny
+    ? (hasCollisions && hasLimits ? `${_collisionViolations.length} COLL · ${_limitViolations.length} LIM`
+      : hasCollisions ? `${_collisionViolations.length} COLLISION${_collisionViolations.length>1?'S':''}`
+      : `${_limitViolations.length} LIMIT${_limitViolations.length>1?'S':''}`)
+    : 'OK';
+
+  if(!hasAny){
+    report.innerHTML = '<span class="ok-msg">No violations</span>';
+    return;
+  }
+  const rows = [
+    ..._collisionViolations.map(v=>`<div class="coll-item">${v}</div>`),
+    ..._limitViolations.map(v=>`<div class="limit-item">${v}</div>`),
+  ];
+  report.innerHTML = rows.join('');
+}
+
+
+function getLimits(){
+  return {
+    xmin: parseFloat(document.getElementById('lim-xmin').value),
+    xmax: parseFloat(document.getElementById('lim-xmax').value),
+    ymin: parseFloat(document.getElementById('lim-ymin').value),
+    ymax: parseFloat(document.getElementById('lim-ymax').value),
+    zmin: parseFloat(document.getElementById('lim-zmin').value),
+    zmax: parseFloat(document.getElementById('lim-zmax').value),
+    bmin: parseFloat(document.getElementById('lim-bmin').value),
+    bmax: parseFloat(document.getElementById('lim-bmax').value),
+    cmin: parseFloat(document.getElementById('lim-cmin').value),
+    cmax: parseFloat(document.getElementById('lim-cmax').value),
+  };
+}
+
+// ── Experimental: print mesh convex hull collision (group 3) ────
+let printHullPts   = null;  // cached world-space hull points for current moveIdx
+let printHullIdx   = -1;    // moveIdx at last hull build
+const PRINT_HULL_THROTTLE = 30; // rebuild hull every N moves
+const PRINT_PART  = 'PrintMesh'; // virtual part name
+
+// Extract world-space vertex sample from visible instanced mesh up to instanceCount
+function sampleInstancedMeshPts(mesh, maxCount, maxSamples){
+  if(!mesh || maxCount <= 0) return [];
+  const pts = [];
+  const mat4 = new THREE.Matrix4();
+  const v    = new THREE.Vector3();
+  const worldMat = mesh.matrixWorld.clone();
+  // Sample up to maxSamples instances evenly
+  const step = Math.max(1, Math.floor(maxCount / maxSamples));
+  const geo  = mesh.geometry;
+  const pos  = geo.attributes.position;
+  // We only need the two endpoints of each cylinder instance (y = ±0.5 in local geo)
+  const localPts = [new THREE.Vector3(0,-0.5,0), new THREE.Vector3(0,0.5,0)];
+  for(let i = 0; i < maxCount; i += step){
+    mesh.getMatrixAt(i, mat4);
+    for(const lp of localPts){
+      v.copy(lp).applyMatrix4(mat4).applyMatrix4(worldMat);
+      pts.push([v.x, v.y, v.z]);
+    }
+  }
+  return pts;
+}
+
+function buildPrintHull(moveIdx){
+  if(!mesh3 && !mesh5) return null;
+  scene.updateMatrixWorld(true);
+  const pts = [];
+  if(mesh3 && cum3[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh3, cum3[moveIdx], 200));
+  if(mesh5 && cum5[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh5, cum5[moveIdx], 200));
+  if(pts.length < 4) return null;
+  // Reduce to hull vertices to keep SAT fast
+  try{
+    const verts = pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]));
+    const hull  = new THREE.ConvexHull();
+    hull.setFromPoints(verts);
+    const seen = new Set(); const hullPts = [];
+    for(const face of hull.faces){
+      let e = face.edge;
+      do {
+        const vv = e.head().point;
+        const key = `${vv.x.toFixed(3)},${vv.y.toFixed(3)},${vv.z.toFixed(3)}`;
+        if(!seen.has(key)){ seen.add(key); hullPts.push([vv.x,vv.y,vv.z]); }
+        e = e.next;
+      } while(e !== face.edge);
+    }
+    return hullPts.length >= 4 ? hullPts : pts;
+  } catch(ex){ return pts; }
+}
+
+function bedPoseKey(){
+  // A cheap string key representing bedGroup's current world pose.
+  const q = bedGroup.quaternion, p = bedGroup.position;
+  return `${q.x.toFixed(4)},${q.y.toFixed(4)},${q.z.toFixed(4)},${q.w.toFixed(4)},${p.y.toFixed(3)}`;
+}
+let printHullPoseKey = '';
+
+function getPrintHullPts(moveIdx){
+  const curPoseKey = bedPoseKey();
+  const poseChanged = curPoseKey !== printHullPoseKey;
+  const stale = printHullPts === null
+    || poseChanged
+    || Math.abs(moveIdx - printHullIdx) >= (isPlaying ? PRINT_HULL_THROTTLE : 1);
+  if(stale){
+    printHullPts = buildPrintHull(moveIdx);
+    printHullIdx = moveIdx;
+    printHullPoseKey = curPoseKey;
+  }
+  return printHullPts;
+}
+
+function clearPrintHull(){
+  printHullPts = null;
+  printHullIdx = -1;
+  printHullPoseKey = '';
+}
+
+// ── Per-move check called every playback step ────────────────────
+// Returns true if any violation was found (so caller can pause).
+// Also updates the violation panel in real-time.
+function checkCurrentMove(){
+  const prog = document.getElementById('prog');
+  const pct  = parseInt(prog.value);
+  const frac = pct / 10000;
+  const moveIdx = Math.max(0, Math.floor(allMoves.length * frac) - 1);
+  const m = allMoves[moveIdx];
+  if(!m) return false;
+
+  const L = getLimits();
+  const axes = [
+    {key:'x', label:'X', val:m.mx, min:L.xmin, max:L.xmax, unit:'mm'},
+    {key:'y', label:'Y', val:m.my, min:L.ymin, max:L.ymax, unit:'mm'},
+    {key:'z', label:'Z', val:m.mz, min:L.zmin, max:L.zmax, unit:'mm'},
+    {key:'b', label:'B', val:m.mb, min:L.bmin, max:L.bmax, unit:'°'},
+  ];
+
+  const limViolations = [];
+  for(const ax of axes){
+    if(ax.val < ax.min) limViolations.push(`L${m.lineNum||'?'}: ${ax.label} ${ax.val.toFixed(2)}${ax.unit} &lt; ${ax.min}`);
+    else if(ax.val > ax.max) limViolations.push(`L${m.lineNum||'?'}: ${ax.label} ${ax.val.toFixed(2)}${ax.unit} &gt; ${ax.max}`);
+  }
+
+  // Collision check for current machine pose
+  let collViolations = [];
+  clearAllPartColliding(); // reset tints each frame
+  // ── Proxy vs proxy collision (machine parts) ────────────────────
+  const collidingParts = new Set();
+  if(collisionEnabled && collProxies.length && machineLoaded){
+    machineGroup.visible = true;
+    rootGroup.rotation.x = rotX; rootGroup.rotation.y = rotY;
+    rootGroup.position.x = panX; rootGroup.position.y = panY;
+    rootGroup.updateWorldMatrix(true, true);
+    const proxiesByPart = {};
+    for(const p of collProxies){
+      if(!proxiesByPart[p.part]) proxiesByPart[p.part] = [];
+      proxiesByPart[p.part].push(p);
+    }
+    const parts = Object.keys(proxiesByPart);
+    for(let i=0; i<parts.length; i++){
+      for(let j=i+1; j<parts.length; j++){
+        if(!shouldCheck(parts[i], parts[j])) continue;
+        for(const pa of proxiesByPart[parts[i]]){
+          for(const pb of proxiesByPart[parts[j]]){
+            const wA = getProxyWorldPts(pa), wB = getProxyWorldPts(pb);
+            if(!wA||!wB) continue;
+            if(pointCloudsOverlap(wA, wB)){
+              const key = parts[i]+' ↔ '+parts[j];
+              if(!collViolations.includes(key)) collViolations.push(key);
+              setProxyColliding(pa.id, true);
+              setProxyColliding(pb.id, true);
+              collidingParts.add(parts[i]);
+              collidingParts.add(parts[j]);
+            }
+          }
+        }
+      }
+    }
+    for(const part of Object.keys(partCollidingState)) setPartColliding(part, collidingParts.has(part));
+    for(const part of collidingParts) setPartColliding(part, true);
+    machineGroup.visible = document.getElementById('showMach').checked;
+  }
+
+  // ── Print mesh vs machine (experimental) — runs independently ───
+  const printEnabled = document.getElementById('coll-print-enabled')?.checked ?? false;
+  // During jog the prog bar may be at 0 with no G-code, so use the last move index
+  // which covers all extrusion laid down so far.
+  const printMoveIdx = (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)
+    ? moveIdx
+    : Math.max(0, allMoves.length - 1);
+  if(collisionEnabled && printEnabled && collProxies.length && (cum3[printMoveIdx] > 0 || cum5[printMoveIdx] > 0)){
+    // Must sync rootGroup's orbit transform into matrixWorld before reading any world positions
+    rootGroup.rotation.x = rotX; rootGroup.rotation.y = rotY;
+    rootGroup.position.x = panX; rootGroup.position.y = panY;
+    rootGroup.updateWorldMatrix(true, true);
+    const hullPts = getPrintHullPts(printMoveIdx);
+    if(hullPts && hullPts.length >= 4){
+      for(const p of collProxies){
+        if(!shouldCheck(PRINT_PART, p.part)) continue;
+        const wB = getProxyWorldPts(p);
+        if(!wB || !wB.length) continue;
+        if(pointCloudsOverlap(hullPts, wB)){
+          const key = 'PrintMesh ↔ ' + p.part;
+          if(!collViolations.includes(key)) collViolations.push(key);
+          setPartColliding(p.part, true);
+        }
+      }
+    }
+  }
+  // Always restore parts no longer in any collision (machine-vs-machine or print hull)
+  for(const part of Object.keys(partCollidingState)){
+    if(!collidingParts.has(part) && !collViolations.some(k=>k.includes('↔ '+part))){
+      setPartColliding(part, false);
+    }
+  }
+
+  const hadViolation = limViolations.length > 0 || collViolations.length > 0;
+
+  // Only update the panel when state actually changes (avoid per-frame DOM thrash)
+  const limStr  = limViolations.join('|');
+  const collStr = collViolations.join('|');
+  if(limStr !== (_lastLimStr||'') || collStr !== (_lastCollStr||'')){
+    _lastLimStr  = limStr;
+    _lastCollStr = collStr;
+    _limitViolations    = limViolations;
+    _collisionViolations = collViolations;
+    renderViolationPanel();
+  }
+
+  return hadViolation;
+}
+let _lastLimStr = '', _lastCollStr = '';
+
+function checkLimits(){
+  const L=getLimits();
+  const seen={};
+  _limitViolations=[];
+
+  const axes=[
+    {key:'x', label:'X', min:L.xmin, max:L.xmax, get:m=>m.mx},
+    {key:'y', label:'Y', min:L.ymin, max:L.ymax, get:m=>m.my},
+    {key:'z', label:'Z', min:L.zmin, max:L.zmax, get:m=>m.mz},
+    {key:'b', label:'B', min:L.bmin, max:L.bmax, get:m=>m.mb},
+  ];
+
+  for(let i=0;i<allMoves.length;i++){
+    const m=allMoves[i];
+    for(const ax of axes){
+      const v=ax.get(m);
+      const unit=ax.key==='b'||ax.key==='c'?'°':'mm';
+      if(v<ax.min){
+        const k=ax.key+'-min';
+        if(!seen[k]){ seen[k]=true; _limitViolations.push(`L${m.lineNum}: ${ax.label} ${v.toFixed(2)}${unit} &lt; ${ax.min}`); }
+      }
+      if(v>ax.max){
+        const k=ax.key+'-max';
+        if(!seen[k]){ seen[k]=true; _limitViolations.push(`L${m.lineNum}: ${ax.label} ${v.toFixed(2)}${unit} &gt; ${ax.max}`); }
+      }
+    }
+  }
+  renderViolationPanel();
+}
+document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('fi').click());
+document.getElementById('fi').addEventListener('change',ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  document.getElementById('tb-fname').textContent=f.name;
+  document.getElementById('tb-status').textContent='parsing…';
+  const r=new FileReader();
+  r.onload=e=>{cachedText=e.target.result; rebuildAll(true);};
+  r.readAsText(f);
+});
+document.getElementById('viewMode').addEventListener('change',()=>rebuildAll(false));
+document.getElementById('nozzle').addEventListener('change',()=>rebuildAll(false));
+document.getElementById('sc').addEventListener('change',()=>rebuildAll(false));
+['se','s5','st'].forEach(id=>document.getElementById(id).addEventListener('change',()=>rebuildAll(false)));
+
+// Show/hide the simple buildplate and nozzle cone
+function setSimpleSceneVisible(visible){
+  if(buildplateMesh) buildplateMesh.visible = visible;
+  const grid = bedGroup.getObjectByName('bp-grid');
+  if(grid) grid.visible = visible;
+  if(nozzleMesh) nozzleMesh.visible = visible;
+  // also reflect in settings checkboxes so they stay in sync
+  document.getElementById('s-bp-vis').checked = visible;
+  document.getElementById('s-nz-vis').checked = visible;
+}
+
+// Machine toggle
+document.getElementById('showMach').addEventListener('change', function(){
+  document.getElementById('chip-mach').classList.toggle('on', this.checked);
+  if(this.checked){
+    const name=document.getElementById('machineSelect').value;
+    if(name) loadMachine(name);
+  } else {
+    if(machineGroup.parent) machineGroup.visible=false;
+    setSimpleSceneVisible(true);
+  }
+});
+
+// Machine selector — "none" option reverts to simple scene
+document.getElementById('machineSelect').addEventListener('change', function(){
+  if(!this.value){
+    // No machine selected — show simple bed/nozzle, hide machine
+    disposeMachine();
+    if(machineGroup.parent) machineGroup.visible=false;
+    document.getElementById('showMach').checked=false;
+    document.getElementById('chip-mach').classList.remove('on');
+    setSimpleSceneVisible(true);
+    return;
+  }
+  document.getElementById('showMach').checked=true;
+  document.getElementById('chip-mach').classList.add('on');
+  setSimpleSceneVisible(false);
+  loadMachine(this.value);
+});
+document.getElementById('prog').addEventListener('input',e=>applyProgress(parseInt(e.target.value)));
+
+// ── Playback ──────────────────────────────────────────────────────
+let playInterval=null;
+let isPlaying=false;
+
+function setPlaying(val){
+  isPlaying=val;
+  const pbp=document.getElementById('pb-play'); pbp.textContent=val?'⏸':'▶'; pbp.classList.toggle('play-active',val);
+  setJogEnabled(!val);
+}
+
+function stepForward(){
+  const prog=document.getElementById('prog');
+  const cur=parseInt(prog.value);
+  if(cur>=10000){ stopPlayback(); checkCurrentMove(); return; }
+  const speed=parseInt(document.getElementById('pb-speed').value);
+  const next=Math.min(10000, cur+speed);
+  prog.value=next;
+  applyProgress(next);
+  if(checkCurrentMove()) stopPlayback(); // pause on violation
+}
+
+function stopPlayback(){
+  clearInterval(playInterval);
+  playInterval=null;
+  setPlaying(false);
+  // Pre-warm print hull cache now, while bedGroup is still in its print pose.
+  // This ensures isJogging checks have a valid hull even if jog starts immediately.
+  if(mesh3 || mesh5){
+    const prog = document.getElementById('prog');
+    const moveIdx = Math.max(0, Math.floor(allMoves.length * parseInt(prog.value) / 10000) - 1);
+    const pmIdx = (cum3[moveIdx] > 0 || cum5[moveIdx] > 0) ? moveIdx : Math.max(0, allMoves.length - 1);
+    printHullPts = buildPrintHull(pmIdx);
+    printHullIdx = pmIdx;
+  }
+}
+
+function startPlayback(){
+  if(playInterval) clearInterval(playInterval);
+  setPlaying(true);
+  playInterval=setInterval(stepForward, 16); // ~60fps
+}
+
+document.getElementById('pb-play').addEventListener('click',()=>{
+  if(isPlaying){ stopPlayback(); }
+  else {
+    // If at end, restart from beginning
+    if(parseInt(document.getElementById('prog').value)>=10000){
+      document.getElementById('prog').value=0;
+      applyProgress(0);
+    }
+    startPlayback();
+  }
+});
+document.getElementById('pb-stop').addEventListener('click',()=>{
+  stopPlayback();
+  document.getElementById('prog').value=0;
+  applyProgress(0);
+});
+document.getElementById('pb-start').addEventListener('click',()=>{ stopPlayback(); document.getElementById('prog').value=0; applyProgress(0); });
+document.getElementById('pb-end').addEventListener('click',()=>{ stopPlayback(); document.getElementById('prog').value=10000; applyProgress(10000); });
+document.getElementById('pb-speed').addEventListener('input',function(){
+  document.getElementById('pb-speed-val').textContent=this.value+'×';
+});
+
+// ── Arrow key single-line navigation ─────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(isPlaying) return;
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return;
+  e.preventDefault();
+  if(!allMoves.length) return;
+  const prog = document.getElementById('prog');
+  const cur = parseInt(prog.value);
+  const curMove = Math.round(cur/10000 * allMoves.length);
+  const nextMove = e.key==='ArrowRight'
+    ? Math.min(allMoves.length, curMove+1)
+    : Math.max(0, curMove-1);
+  const newPct = Math.round(nextMove/allMoves.length * 10000);
+  prog.value = newPct;
+  applyProgress(newPct);
+});
+
+// ── Collision proxy system ────────────────────────────────────────
+let collProxies = [];
+let proxyMeshes = {}; // id → THREE.Mesh
+let collisionEnabled = true;
+let nextProxyId = 1;
+let selectedPart = null; // currently selected machine part for proxy assignment
+let partHighlights = {}; // part name → original materials
+
+// ── Collision groups ──────────────────────────────────────────────
+// Group 0 = never check (Frame, static)
+// Group 1 = toolhead side (X, Y)
+// Group 2 = bed side (Z, B, C)
+// Only proxies from DIFFERENT non-zero groups are checked.
+const DEFAULT_GROUPS = {Frame:0, Z:2, B:2, C:2, Y:1, X:1, PrintMesh:2};
+let partGroups = {...DEFAULT_GROUPS};
+
+function shouldCheck(a, b){
+  const ga = partGroups[a] ?? 1;
+  const gb = partGroups[b] ?? 1;
+  if(ga===0 || gb===0) return false;
+  return ga !== gb;
+}
+
+// Solid transparent proxy mesh — supports box, cylinder, sphere, hull
+function makeProxyMesh(proxy, colliding=false){
+  let geo;
+  if(proxy.type==='hull' && proxy.hullPoints){
+    try{
+      const pts = proxy.hullPoints.map(p=>new THREE.Vector3(p[0],p[1],p[2]));
+      geo = new THREE.ConvexGeometry(pts);
+    } catch(e){ geo = new THREE.SphereGeometry(10,8,6); } // fallback
+  } else if(proxy.type==='sphere'){
+    geo=new THREE.SphereGeometry(proxy.sx,16,10);
+  } else if(proxy.type==='cylinder'){
+    geo=new THREE.CylinderGeometry(proxy.sx,proxy.sx,proxy.sy,16,1);
+  } else {
+    geo=new THREE.BoxGeometry(proxy.sx,proxy.sy,proxy.sz);
+  }
+  const col = colliding ? 0xff2222 : 0xff4444;
+  const mat = new THREE.MeshLambertMaterial({color:col, transparent:true, opacity:0.22, side:THREE.DoubleSide, depthWrite:false});
+  const wireMat = new THREE.LineBasicMaterial({color:colliding?0xff0000:0xff6666, transparent:true, opacity:0.5});
+  const wireGeo = new THREE.WireframeGeometry(geo);
+  const grp = new THREE.Group();
+  grp.add(new THREE.Mesh(geo,mat));
+  grp.add(new THREE.LineSegments(wireGeo,wireMat));
+  grp.position.set(proxy.ox||0, proxy.oy||0, proxy.oz||0);
+  return grp;
+}
+
+// Compute concavity of a point set relative to its convex hull
+// Returns the plane that best splits concave regions
+function findBestSplitPlane(pts, hullGeo){
+  if(!hullGeo || !hullGeo.attributes.position) return null;
+
+  // Get hull face normals and centroids
+  const hullPos = hullGeo.attributes.position;
+  const hullNorm = hullGeo.attributes.normal;
+  if(!hullNorm) return null;
+
+  // Find points most "inside" the hull — furthest from any hull face
+  let maxConcavity = 0;
+  let worstPt = null;
+
+  const faceCount = hullPos.count / 3;
+  const v = new THREE.Vector3();
+
+  for(const p of pts){
+    v.set(p[0],p[1],p[2]);
+    // Find min distance to any hull face (negative = inside)
+    let minDist = Infinity;
+    for(let f=0;f<faceCount;f++){
+      const nx = hullNorm.getX(f*3);
+      const ny = hullNorm.getY(f*3);
+      const nz = hullNorm.getZ(f*3);
+      const fx = hullPos.getX(f*3);
+      const fy = hullPos.getY(f*3);
+      const fz = hullPos.getZ(f*3);
+      const d = (v.x-fx)*nx + (v.y-fy)*ny + (v.z-fz)*nz;
+      if(d < minDist) minDist = d;
+    }
+    if(-minDist > maxConcavity){ maxConcavity = -minDist; worstPt = p; }
+  }
+
+  if(maxConcavity < 0.5 || !worstPt) return null; // convex enough, no split needed
+
+  // Try splitting along each principal axis through the centroid
+  let cx=0,cy=0,cz=0;
+  for(const p of pts){ cx+=p[0];cy+=p[1];cz+=p[2]; }
+  cx/=pts.length; cy/=pts.length; cz/=pts.length;
+
+  // Try 3 axis-aligned planes + 3 diagonal planes through centroid
+  const candidates = [
+    [1,0,0,cx], [0,1,0,cy], [0,0,1,cz],
+    [1,1,0,(cx+cy)/2], [1,0,1,(cx+cz)/2], [0,1,1,(cy+cz)/2]
+  ];
+
+  let bestScore = -1, bestPlane = null;
+  for(const [nx,ny,nz,d] of candidates){
+    const len = Math.sqrt(nx*nx+ny*ny+nz*nz);
+    let nPos=0, nNeg=0;
+    for(const p of pts){
+      const side = (p[0]*nx+p[1]*ny+p[2]*nz)/len - d/len;
+      if(side >= 0) nPos++; else nNeg++;
+    }
+    // Score: prefer balanced splits
+    const balance = 1 - Math.abs(nPos-nNeg)/pts.length;
+    if(balance > bestScore){ bestScore=balance; bestPlane=[nx/len,ny/len,nz/len,d/len]; }
+  }
+  return bestPlane;
+}
+
+// Split point cloud by plane [nx,ny,nz,d] → [side>=0, side<0]
+function splitByPlane(pts, plane){
+  const [nx,ny,nz,d] = plane;
+  const pos=[], neg=[];
+  for(const p of pts){
+    if(p[0]*nx+p[1]*ny+p[2]*nz >= d) pos.push(p); else neg.push(p);
+  }
+  return [pos, neg];
+}
+
+// Build a convex hull geometry from points, returns null if degenerate
+function buildHullGeo(pts){
+  if(pts.length < 4) return null;
+  try{
+    const verts = pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]));
+    return new THREE.ConvexGeometry(verts);
+  }catch(e){ return null; }
+}
+
+// Auto-decompose a point cloud into 1 or 2 convex hulls
+// Returns array of point arrays (1 or 2 groups)
+function decomposeToHulls(pts, concavityThreshold=1.0){
+  if(pts.length < 4) return [pts];
+
+  // Build initial hull and check concavity
+  const hullGeo = buildHullGeo(pts);
+  if(!hullGeo) return [pts];
+
+  const plane = findBestSplitPlane(pts, hullGeo);
+  if(!plane) return [pts]; // already convex enough
+
+  const [posGroup, negGroup] = splitByPlane(pts, plane);
+
+  // Only split if both groups are large enough for a hull
+  if(posGroup.length < 4 || negGroup.length < 4) return [pts];
+
+  return [posGroup, negGroup];
+}
+
+// Extract only convex hull surface vertices from a point cloud
+// Reduces storage from 800+ points to typically 30-80 unique hull verts
+function extractHullVertices(pts){
+  if(pts.length < 4) return pts;
+  try{
+    const verts = pts.map(p => new THREE.Vector3(p[0],p[1],p[2]));
+    const hull = new THREE.ConvexHull();
+    hull.setFromPoints(verts);
+    // Collect unique vertices from hull faces
+    const seen = new Set();
+    const result = [];
+    for(const face of hull.faces){
+      let edge = face.edge;
+      do {
+        const v = edge.head().point;
+        const key = `${v.x.toFixed(4)},${v.y.toFixed(4)},${v.z.toFixed(4)}`;
+        if(!seen.has(key)){
+          seen.add(key);
+        result.push([
+          Math.round(v.x*100)/100,
+          Math.round(v.y*100)/100,
+          Math.round(v.z*100)/100
+        ]);
+        }
+        edge = edge.next;
+      } while(edge !== face.edge);
+    }
+    return result.length >= 4 ? result : pts;
+  } catch(e){
+    return pts; // fallback to all points if hull fails
+  }
+}
+
+// Auto-generate convex hull proxies for all loaded machine parts
+function autoGenerateHulls(){
+  if(!machineLoaded){ document.getElementById('coll-status').textContent='Load a machine first'; return; }
+  document.getElementById('coll-status').textContent='Generating hulls…';
+
+  // Clear existing hull proxies (keep manual ones)
+  collProxies = collProxies.filter(p=>p.type!=='hull');
+
+  // Skip Frame (complex) and only use direct mesh children (not grandchildren = child parts)
+  const SKIP_AUTO = new Set(['Frame']);
+  let count=0;
+
+  rootGroup.updateMatrixWorld(true);
+
+  for(const partName of MACHINE_PARTS){
+    if(SKIP_AUTO.has(partName)) continue;
+    const grp = mGrp[partName]; if(!grp) continue;
+
+    const allPts=[];
+    for(const child of grp.children){
+      if(!child.isMesh) continue;
+      const pos=child.geometry?.attributes?.position; if(!pos) continue;
+      const total=pos.count;
+      const step=Math.max(1,Math.floor(total/800));
+      const v=new THREE.Vector3();
+      // Apply only the child's LOCAL matrix (e.g. rotation.x=-PI/2) to get part-group local coords
+      const localMat=child.matrix;
+      for(let i=0;i<total;i+=step){
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(localMat);
+        allPts.push([v.x,v.y,v.z]);
+      }
+      // Also include extreme points
+      for(let i=0;i<total;i++){
+        v.set(pos.getX(i),pos.getY(i),pos.getZ(i)).applyMatrix4(localMat);
+        if(i===0||v.x<allPts[0][0]) allPts.push([v.x,v.y,v.z]);
+      }
+    }
+
+    if(allPts.length<4) continue;
+
+    // Try to decompose into 2 hulls for concave parts
+    const groups = decomposeToHulls(allPts);
+    for(let gi=0;gi<groups.length;gi++){
+      const grp2=groups[gi];
+      if(grp2.length<4) continue;
+      // Extract only convex hull surface vertices — drastically reduces storage
+      const hullVerts = extractHullVertices(grp2);
+      collProxies.push({
+        id:nextProxyId++,
+        part:partName,
+        type:'hull',
+        hullPoints: hullVerts,
+        sx:0,sy:0,sz:0,ox:0,oy:0,oz:0,
+        label: groups.length>1 ? `${partName} hull ${gi+1}` : partName
+      });
+      count++;
+    }
+  }
+
+  rebuildProxyWireframes();
+  renderProxyList();
+  document.getElementById('coll-status').textContent=`Generated ${count} convex hull proxies`;
+}
+
+// Proxies visible only when: modal is open OR "Show proxies" checkbox explicitly checked
+function shouldShowProxies(){
+  return collConfigOpen || (document.getElementById('coll-show-proxies')?.checked ?? false);
+}
+
+function rebuildProxyWireframes(){
+  Object.values(proxyMeshes).forEach(m=>{if(m.parent)m.parent.remove(m);});
+  proxyMeshes={};
+  const show = shouldShowProxies();
+  for(const proxy of collProxies){
+    const grp=mGrp[proxy.part]; if(!grp) continue;
+    const mesh=makeProxyMesh(proxy);
+    mesh.visible=show;
+    grp.add(mesh);
+    proxyMeshes[proxy.id]=mesh;
+  }
+}
+
+function setProxyWireframesVisible(v){
+  Object.values(proxyMeshes).forEach(m=>m.visible=v);
+}
+
+
+function setProxyColliding(id, colliding){
+  const mesh=proxyMeshes[id]; if(!mesh) return;
+  mesh.traverse(c=>{
+    if(c.isMesh) c.material.color.set(colliding?0xff2222:0xff4444);
+    if(c.isLineSegments) c.material.color.set(colliding?0xff0000:0xff6666);
+  });
+  // Also tint the actual machine part this proxy belongs to
+  const proxy = collProxies.find(p=>p.id===id);
+  if(proxy) setPartColliding(proxy.part, colliding);
+}
+
+// ── Machine part collision highlight ─────────────────────────────
+const partCollidingState = {};  // partName → bool
+const partOrigMats = {};        // partName → [{mesh, origEmissive, origEI}]
+
+function setPartColliding(partName, colliding){
+  if(partCollidingState[partName] === colliding) return;
+  partCollidingState[partName] = colliding;
+  const grp = mGrp[partName]; if(!grp) return;
+  if(colliding){
+    if(!partOrigMats[partName]){
+      const saved = [];
+      grp.traverse(c=>{
+        if(!c.isMesh || c.userData.isProxyMesh) return;
+        c.material = c.material.clone();
+        saved.push({mesh:c, origEmissive:c.material.emissive?.clone()||new THREE.Color(0), origEI:c.material.emissiveIntensity||0});
+      });
+      partOrigMats[partName] = saved;
+    }
+    grp.traverse(c=>{
+      if(!c.isMesh || c.userData.isProxyMesh) return;
+      c.material.emissive = new THREE.Color(0xcc0000);
+      c.material.emissiveIntensity = 0.7;
+    });
+  } else {
+    const saved = partOrigMats[partName];
+    if(saved){
+      for(const {mesh,origEmissive,origEI} of saved){
+        if(mesh.material){
+          mesh.material.emissive.copy(origEmissive);
+          mesh.material.emissiveIntensity = origEI;
+        }
+      }
+      delete partOrigMats[partName];
+    }
+  }
+}
+
+function clearAllPartColliding(){
+  for(const part of Object.keys(partCollidingState)){
+    if(partCollidingState[part]) setPartColliding(part, false);
+  }
+}
+
+// ── Part selection via raycasting ─────────────────────────────────
+let collConfigOpen = false;
+const raycaster = new THREE.Raycaster();
+const mouse2D = new THREE.Vector2();
+
+// Build flat list of all meshes in machineGroup with their part name
+function getMachineRayTargets(){
+  const targets=[];
+  for(const [partName, grp] of Object.entries(mGrp)){
+    grp.traverse(c=>{
+      if(c.isMesh){ c.userData.partName=partName; targets.push(c); }
+    });
+  }
+  return targets;
+}
+
+function highlightPart(partName){
+  // Clear previous highlight
+  clearPartHighlight();
+  selectedPart=partName;
+  if(!mGrp[partName]) return;
+  mGrp[partName].traverse(c=>{
+    if(!c.isMesh||c.userData.isProxyMesh) return;
+    partHighlights[c.uuid]={mesh:c, origColor:c.material.color.clone(), origEmissive:c.material.emissive?.clone()};
+    c.material=c.material.clone();
+    c.material.emissive=new THREE.Color(0x224488);
+    c.material.emissiveIntensity=0.6;
+  });
+  document.getElementById('coll-selected-part').textContent='Selected: '+partName;
+}
+
+function clearPartHighlight(){
+  for(const {mesh,origColor,origEmissive} of Object.values(partHighlights)){
+    if(mesh.material){
+      mesh.material.color.copy(origColor);
+      if(origEmissive) mesh.material.emissive.copy(origEmissive);
+      else if(mesh.material.emissive) mesh.material.emissive.set(0x000000);
+      mesh.material.emissiveIntensity=0;
+    }
+  }
+  partHighlights={};
+  selectedPart=null;
+  document.getElementById('coll-selected-part').textContent='Click a machine part to select';
+}
+
+// Canvas click — only raycast when coll config is open AND not dragging
+let mouseDownPos={x:0,y:0};
+cvWrap.addEventListener('mousedown',e=>{mouseDownPos={x:e.clientX,y:e.clientY};});
+cvWrap.addEventListener('click',e=>{
+  if(!collConfigOpen||!machineLoaded) return;
+  const dx=Math.abs(e.clientX-mouseDownPos.x), dy=Math.abs(e.clientY-mouseDownPos.y);
+  if(dx>4||dy>4) return;
+
+  // Don't deselect if clicking a gizmo handle
+  if(getGizmoHit(e)) return;
+
+  // Check if clicking a proxy mesh
+  const proxyId=getProxyHit(e);
+  if(proxyId!==null){ selectProxy(proxyId); return; }
+
+  // Try to select a machine part
+  const rect=cvWrap.getBoundingClientRect();
+  mouse2D.x=((e.clientX-rect.left)/rect.width)*2-1;
+  mouse2D.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouse2D,camera);
+  const targets=getMachineRayTargets();
+  const hits=raycaster.intersectObjects(targets,false);
+  if(hits.length>0){
+    const partName=hits[0].object.userData.partName;
+    if(partName) highlightPart(partName);
+  } else {
+    clearPartHighlight();
+    selectProxy(null);
+  }
+});
+
+function rebuildProxyWireframes(){
+  // Remove old
+  Object.values(proxyMeshes).forEach(m=>{
+    if(m.parent) m.parent.remove(m);
+    m.traverse(c=>{ if(c.geometry) c.geometry.dispose(); });
+  });
+  proxyMeshes={};
+  const show = shouldShowProxies();
+  for(const proxy of collProxies){
+    const grp = mGrp[proxy.part];
+    if(!grp) continue;
+    const mesh = makeProxyMesh(proxy);
+    mesh.visible = show;
+    grp.add(mesh);
+    proxyMeshes[proxy.id] = mesh;
+  }
+}
+
+function setProxyWireframesVisible(v){
+  Object.values(proxyMeshes).forEach(m=>m.visible=v);
+}
+
+function getProxyWorldPts(proxy){
+  const grp=mGrp[proxy.part]; if(!grp) return null;
+  const v=new THREE.Vector3();
+  const mat=grp.matrixWorld; // needed by ALL branches, not just hull
+
+  if(proxy.type==='hull'&&proxy.hullPoints){
+    // Points are in part-group local space — apply group's world matrix for current kinematics
+    return proxy.hullPoints.map(p=>{ v.set(p[0],p[1],p[2]).applyMatrix4(mat); return [v.x,v.y,v.z]; });
+  }
+  const cx=proxy.ox||0,cy=proxy.oy||0,cz=proxy.oz||0;
+  const pts=[];
+  if(proxy.type==='sphere'){
+    const r=proxy.sx;
+    for(let i=0;i<8;i++) for(let j=0;j<6;j++){
+      const th=i/8*Math.PI*2,ph=j/6*Math.PI-Math.PI/2;
+      pts.push([cx+r*Math.cos(ph)*Math.cos(th),cy+r*Math.sin(ph),cz+r*Math.cos(ph)*Math.sin(th)]);
+    }
+  } else if(proxy.type==='cylinder'){
+    const r=proxy.sx,h=proxy.sy/2;
+    for(let i=0;i<10;i++){
+      const th=i/10*Math.PI*2;
+      pts.push([cx+r*Math.cos(th),cy+h,cz+r*Math.sin(th)]);
+      pts.push([cx+r*Math.cos(th),cy-h,cz+r*Math.sin(th)]);
+    }
+    pts.push([cx,cy+h,cz]);pts.push([cx,cy-h,cz]);
+  } else {
+    const hx=proxy.sx/2,hy=proxy.sy/2,hz=proxy.sz/2;
+    for(const sx of[-1,1])for(const sy of[-1,1])for(const sz of[-1,1])
+      pts.push([cx+sx*hx,cy+sy*hy,cz+sz*hz]);
+  }
+  return pts.map(p=>{ v.set(p[0],p[1],p[2]).applyMatrix4(mat); return [v.x,v.y,v.z]; });
+}
+
+function gjkSupport(pts,d){
+  let best=-Infinity,bx=0,by=0,bz=0;
+  for(const p of pts){
+    const dot=p[0]*d[0]+p[1]*d[1]+p[2]*d[2];
+    if(dot>best){best=dot;bx=p[0];by=p[1];bz=p[2];}
+  }
+  return [bx,by,bz];
+}
+
+// Compute convex hull face normals from a point cloud via THREE.ConvexHull.
+// Returns array of [nx,ny,nz] unit vectors (deduplicated by direction).
+function hullFaceNormals(pts){
+  if(pts.length < 4) return [];
+  try {
+    const verts = pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]));
+    const hull = new THREE.ConvexHull();
+    hull.setFromPoints(verts);
+    const seen = new Set();
+    const normals = [];
+    for(const face of hull.faces){
+      const n = face.normal;
+      // Snap to 4 decimal places to deduplicate parallel faces
+      const key = `${n.x.toFixed(4)},${n.y.toFixed(4)},${n.z.toFixed(4)}`;
+      if(!seen.has(key)){
+        seen.add(key);
+        normals.push([n.x, n.y, n.z]);
+      }
+    }
+    return normals;
+  } catch(e){ return []; }
+}
+
+// Project point cloud onto axis, return [min, max]
+function projectPts(pts, nx, ny, nz){
+  let mn=Infinity, mx=-Infinity;
+  for(const p of pts){
+    const d = p[0]*nx + p[1]*ny + p[2]*nz;
+    if(d < mn) mn = d;
+    if(d > mx) mx = d;
+  }
+  return [mn, mx];
+}
+
+// True SAT overlap test using convex hull face normals of both shapes
+// + 3 axis-aligned axes as fallback for degenerate/flat clouds.
+// Only returns true when the hulls actually interpenetrate — no ghost collisions.
+function pointCloudsOverlap(ptsA, ptsB){
+  if(!ptsA||!ptsB||!ptsA.length||!ptsB.length) return false;
+
+  // Quick AABB pre-check (cheap early-out)
+  let axMin=Infinity,axMax=-Infinity,bxMin=Infinity,bxMax=-Infinity;
+  let ayMin=Infinity,ayMax=-Infinity,byMin=Infinity,byMax=-Infinity;
+  let azMin=Infinity,azMax=-Infinity,bzMin=Infinity,bzMax=-Infinity;
+  for(const p of ptsA){
+    if(p[0]<axMin)axMin=p[0]; if(p[0]>axMax)axMax=p[0];
+    if(p[1]<ayMin)ayMin=p[1]; if(p[1]>ayMax)ayMax=p[1];
+    if(p[2]<azMin)azMin=p[2]; if(p[2]>azMax)azMax=p[2];
+  }
+  for(const p of ptsB){
+    if(p[0]<bxMin)bxMin=p[0]; if(p[0]>bxMax)bxMax=p[0];
+    if(p[1]<byMin)byMin=p[1]; if(p[1]>byMax)byMax=p[1];
+    if(p[2]<bzMin)bzMin=p[2]; if(p[2]>bzMax)bzMax=p[2];
+  }
+  if(axMax<bxMin||bxMax<axMin) return false;
+  if(ayMax<byMin||byMax<ayMin) return false;
+  if(azMax<bzMin||bzMax<azMin) return false;
+
+  // Build SAT axes: face normals from both hulls + 3 axis-aligned fallbacks
+  const axesA = hullFaceNormals(ptsA);
+  const axesB = hullFaceNormals(ptsB);
+  const axes  = axesA.length && axesB.length
+    ? [...axesA, ...axesB]
+    : [[1,0,0],[0,1,0],[0,0,1]]; // fallback if hull fails (flat/degenerate)
+
+  // Also add cross products of representative edges between the two hulls
+  // (needed for edge-edge separation, e.g. two rotated boxes)
+  if(axesA.length && axesB.length){
+    for(const a of axesA){
+      for(const b of axesB){
+        const cx = a[1]*b[2] - a[2]*b[1];
+        const cy = a[2]*b[0] - a[0]*b[2];
+        const cz = a[0]*b[1] - a[1]*b[0];
+        const len = Math.sqrt(cx*cx+cy*cy+cz*cz);
+        if(len > 1e-6) axes.push([cx/len, cy/len, cz/len]);
+      }
+    }
+  }
+
+  for(const [nx,ny,nz] of axes){
+    const [aMin,aMax] = projectPts(ptsA, nx, ny, nz);
+    const [bMin,bMax] = projectPts(ptsB, nx, ny, nz);
+    if(aMax < bMin || bMax < aMin) return false; // separating axis found
+  }
+  return true; // no separating axis — genuinely overlapping
+}
+
+function gjkOverlap(ptsA,ptsB){ return pointCloudsOverlap(ptsA,ptsB); }
+
+function checkCollisions(){
+  if(!collisionEnabled||!collProxies.length||!machineLoaded){
+    _collisionViolations=[];
+    renderViolationPanel();
+    return;
+  }
+  // Force matrix update even on invisible objects
+  machineGroup.visible=true;
+  scene.updateMatrixWorld(true);
+
+  const violations=[];
+  const loopDebug=[];
+  for(const proxy of collProxies) setProxyColliding(proxy.id,false);
+  const proxiesByPart={};
+  for(const p of collProxies){
+    if(!proxiesByPart[p.part]) proxiesByPart[p.part]=[];
+    proxiesByPart[p.part].push(p);
+  }
+  const parts=Object.keys(proxiesByPart);
+  for(let i=0;i<parts.length;i++){
+    for(let j=i+1;j<parts.length;j++){
+      const pA=parts[i],pB=parts[j];
+      const chk=shouldCheck(pA,pB);
+      if(!chk) continue;
+      for(const pa of proxiesByPart[pA]){
+        for(const pb of proxiesByPart[pB]){
+          scene.updateMatrixWorld(true);
+          const wA=getProxyWorldPts(pa),wB=getProxyWorldPts(pb);
+          if(!wA||!wB||!wA.length||!wB.length) continue;
+          const hit=pointCloudsOverlap(wA,wB);
+          loopDebug.push(`${pA}vs${pB}:${hit?'HIT':'miss'}`);
+          if(hit){
+            const key=pA+' <-> '+pB;
+            if(!violations.includes(key)) violations.push(key);
+            setProxyColliding(pa.id,true);
+            setProxyColliding(pb.id,true);
+          }
+        }
+      }
+    }
+  }
+  // Restore machine visibility to user setting
+  machineGroup.visible=document.getElementById('showMach').checked;
+
+  // Update coll-status label inside the config modal
+  document.getElementById('coll-status').textContent=
+    violations.length?violations.length+' collision(s) detected':'No collisions detected';
+
+  // Feed unified panel
+  _collisionViolations = violations.map(v => v.replace(/ <-> /, ' ↔ '));
+  renderViolationPanel();
+}
+
+// ── Proxy Transform Gizmo ─────────────────────────────────────────
+let selectedProxyId = null;
+let gizmoGroup = null;
+let gizmoDragging = false;
+let gizmoAxis = null; // 'x','y','z'
+let gizmoDragStart = null;
+let gizmoProxyStart = null;
+
+const GIZMO_COLORS = { x: 0xcc2020, y: 0x20aa40, z: 0x2060cc };
+const GIZMO_HOVER  = { x: 0xff6060, y: 0x60ff80, z: 0x60a0ff };
+const GIZMO_LENGTH = 40;
+const GIZMO_RADIUS = 1.2;
+
+function buildGizmo(proxy){
+  removeGizmo();
+  const grp = mGrp[proxy.part]; if(!grp) return;
+  gizmoGroup = new THREE.Group();
+  gizmoGroup.position.set(proxy.ox||0, proxy.oy||0, proxy.oz||0);
+
+  const axes = [
+    { key:'x', dir:[1,0,0], color:GIZMO_COLORS.x },
+    { key:'y', dir:[0,1,0], color:GIZMO_COLORS.y },
+    { key:'z', dir:[0,0,1], color:GIZMO_COLORS.z },
+  ];
+
+  for(const ax of axes){
+    // Shaft
+    const shaftGeo = new THREE.CylinderGeometry(GIZMO_RADIUS, GIZMO_RADIUS, GIZMO_LENGTH*0.75, 8);
+    const mat = new THREE.MeshLambertMaterial({color:ax.color, depthTest:false});
+    const shaft = new THREE.Mesh(shaftGeo, mat.clone());
+    shaft.renderOrder = 999;
+
+    // Cone tip
+    const coneGeo = new THREE.ConeGeometry(GIZMO_RADIUS*2.5, GIZMO_LENGTH*0.25, 8);
+    const cone = new THREE.Mesh(coneGeo, mat.clone());
+    cone.renderOrder = 999;
+
+    // Orient along axis
+    const handle = new THREE.Group();
+    if(ax.key==='x'){ handle.rotation.z = -Math.PI/2; }
+    else if(ax.key==='z'){ handle.rotation.x = Math.PI/2; }
+    // y is default (up)
+
+    shaft.position.y = GIZMO_LENGTH*0.75/2;
+    cone.position.y  = GIZMO_LENGTH*0.75 + GIZMO_LENGTH*0.25/2;
+    handle.add(shaft); handle.add(cone);
+    handle.userData = { gizmoAxis: ax.key, isGizmo: true };
+    shaft.userData = { gizmoAxis: ax.key, isGizmo: true };
+    cone.userData  = { gizmoAxis: ax.key, isGizmo: true };
+    gizmoGroup.add(handle);
+  }
+
+  // Center sphere
+  const cSph = new THREE.Mesh(
+    new THREE.SphereGeometry(GIZMO_RADIUS*2, 10, 8),
+    new THREE.MeshLambertMaterial({color:0xffffff, depthTest:false})
+  );
+  cSph.renderOrder = 999;
+  cSph.userData = { isGizmoCenter: true };
+  gizmoGroup.add(cSph);
+
+  grp.add(gizmoGroup);
+}
+
+function removeGizmo(){
+  if(gizmoGroup && gizmoGroup.parent){
+    gizmoGroup.parent.remove(gizmoGroup);
+    gizmoGroup.traverse(c=>{if(c.geometry)c.geometry.dispose();});
+  }
+  gizmoGroup = null;
+  selectedProxyId = null;
+}
+
+function selectProxy(id){
+  // Deselect previous
+  if(selectedProxyId !== null){
+    setProxyColliding(selectedProxyId, false);
+    const prev = collProxies.find(p=>p.id===selectedProxyId);
+    if(prev) setProxyHighlight(selectedProxyId, false);
+  }
+  selectedProxyId = id;
+  if(id === null){ removeGizmo(); return; }
+  const proxy = collProxies.find(p=>p.id===id);
+  if(!proxy){ removeGizmo(); return; }
+  setProxyHighlight(id, true);
+  buildGizmo(proxy);
+  // Scroll proxy into view in list
+  renderProxyList();
+  // Highlight row
+  setTimeout(()=>{
+    const rows = document.querySelectorAll('.coll-proxy');
+    rows.forEach((r,i)=>{
+      const sel = r.querySelector('.cp-part');
+      if(sel && parseInt(sel.dataset.id)===id){
+        r.style.background='rgba(26,95,168,0.15)';
+        r.scrollIntoView({block:'nearest'});
+      }
+    });
+  },50);
+}
+
+function setProxyHighlight(id, on){
+  const mesh = proxyMeshes[id]; if(!mesh) return;
+  mesh.traverse(c=>{
+    if(c.isMesh) c.material.opacity = on ? 0.5 : 0.22;
+    if(c.isLineSegments) c.material.opacity = on ? 0.9 : 0.5;
+  });
+}
+
+// Gizmo raycasting — check if mouse hits a gizmo handle
+const gizmoRay = new THREE.Raycaster();
+function getGizmoHit(e){
+  if(!gizmoGroup) return null;
+  const rect = cvWrap.getBoundingClientRect();
+  const mx = ((e.clientX-rect.left)/rect.width)*2-1;
+  const my = -((e.clientY-rect.top)/rect.height)*2+1;
+  gizmoRay.setFromCamera({x:mx,y:my}, camera);
+  const targets = [];
+  gizmoGroup.traverse(c=>{ if(c.isMesh && c.userData.isGizmo) targets.push(c); });
+  const hits = gizmoRay.intersectObjects(targets, false);
+  return hits.length>0 ? hits[0].object.userData.gizmoAxis : null;
+}
+
+function getProxyHit(e){
+  if(!collConfigOpen || !Object.keys(proxyMeshes).length) return null;
+  const rect = cvWrap.getBoundingClientRect();
+  const mx = ((e.clientX-rect.left)/rect.width)*2-1;
+  const my = -((e.clientY-rect.top)/rect.height)*2+1;
+  gizmoRay.setFromCamera({x:mx,y:my}, camera);
+  const targets = [];
+  for(const [id, mesh] of Object.entries(proxyMeshes)){
+    mesh.traverse(c=>{ if(c.isMesh){ c.userData._proxyId=parseInt(id); targets.push(c); } });
+  }
+  const hits = gizmoRay.intersectObjects(targets, false);
+  return hits.length>0 ? hits[0].object.userData._proxyId : null;
+}
+
+// Project mouse delta onto a local axis, return LOCAL-space movement amount.
+// proxy.ox/oy/oz live in part-group local space, so we work there end-to-end.
+function screenToAxisDelta(e, prevE, axisKey){
+  if(!gizmoGroup || !gizmoGroup.parent) return 0;
+
+  // Ensure world matrices are current
+  gizmoGroup.parent.updateWorldMatrix(true, false);
+
+  const rect = cvWrap.getBoundingClientRect();
+  const W = rect.width, H = rect.height;
+
+  // Gizmo origin in world space
+  const origin = new THREE.Vector3();
+  gizmoGroup.getWorldPosition(origin);
+
+  // A point 50 local units along the axis, in world space
+  const localTip = { x: new THREE.Vector3(50,0,0), y: new THREE.Vector3(0,50,0), z: new THREE.Vector3(0,0,50) }[axisKey];
+  // Transform tip from gizmoGroup local → world
+  const tip = localTip.clone().applyMatrix4(gizmoGroup.matrixWorld);
+
+  // Project both to NDC then to pixels
+  const o2 = origin.clone().project(camera);
+  const t2 = tip.clone().project(camera);
+  const sx = (t2.x - o2.x) * W * 0.5;
+  const sy = -(t2.y - o2.y) * H * 0.5; // flip Y: NDC +Y = screen -Y
+  const sLen = Math.sqrt(sx*sx + sy*sy);
+  if(sLen < 1) return 0;
+
+  // Mouse delta in screen pixels
+  const dx = e.clientX - prevE.clientX;
+  const dy = e.clientY - prevE.clientY;
+
+  // Project mouse movement onto screen axis
+  const screenDot = (dx*sx + dy*sy) / sLen;
+
+  // Convert: screenDot pixels → local units
+  // sLen pixels = 50 local units (the tip was 50 local units away)
+  return screenDot * (50 / sLen);
+}
+
+// ── Click to select proxy ─────────────────────────────────────────
+let gizmoPrevEvent = null;
+
+window.addEventListener('mousemove', e=>{
+  if(!gizmoDragging || !gizmoAxis || selectedProxyId===null) return;
+  const proxy = collProxies.find(p=>p.id===selectedProxyId);
+  if(!proxy) return;
+
+  const delta = screenToAxisDelta(e, gizmoPrevEvent, gizmoAxis);
+  gizmoPrevEvent = {clientX:e.clientX, clientY:e.clientY};
+
+  proxy.ox = (proxy.ox||0) + (gizmoAxis==='x' ? delta : 0);
+  proxy.oy = (proxy.oy||0) + (gizmoAxis==='y' ? delta : 0);
+  proxy.oz = (proxy.oz||0) + (gizmoAxis==='z' ? delta : 0);
+
+  // Update gizmo position
+  if(gizmoGroup) gizmoGroup.position.set(proxy.ox, proxy.oy, proxy.oz);
+
+  // Update proxy mesh position
+  const mesh = proxyMeshes[proxy.id];
+  if(mesh) mesh.position.set(proxy.ox, proxy.oy, proxy.oz);
+
+  // Update offset field in list
+  const offEl = document.querySelector(`.cp-off[data-id="${proxy.id}"]`);
+  if(offEl) offEl.value = `${proxy.ox.toFixed(1)},${proxy.oy.toFixed(1)},${proxy.oz.toFixed(1)}`;
+});
+
+window.addEventListener('mouseup', e=>{
+  if(gizmoDragging){
+    gizmoDragging = false;
+    gizmoAxis = null;
+    gizmoPrevEvent = null;
+  }
+});
+
+// Gizmo hover cursor
+cvWrap.addEventListener('mousemove', e=>{
+  if(!collConfigOpen || gizmoDragging) return;
+  const ax = getGizmoHit(e);
+  cvWrap.style.cursor = ax ? 'crosshair' : (isDrag ? 'grabbing' : 'default');
+  // Hover color
+  if(gizmoGroup){
+    gizmoGroup.traverse(c=>{
+      if(!c.userData.isGizmo) return;
+      const col = c.userData.gizmoAxis===ax ? GIZMO_HOVER[ax] : GIZMO_COLORS[c.userData.gizmoAxis];
+      if(c.material) c.material.color.setHex(col);
+    });
+  }
+});
+
+// ── Click to select proxy ─────────────────────────────────────────
+function renderProxyList(){
+  const container = document.getElementById('coll-list');
+  container.innerHTML = '';
+  for(const proxy of collProxies){
+    const row = document.createElement('div');
+    row.className = 'coll-proxy';
+    row.innerHTML = `
+      <div class="coll-proxy-row1">
+        <select class="cp-part" data-id="${proxy.id}">
+          ${MACHINE_PARTS.map(p=>`<option value="${p}" ${p===proxy.part?'selected':''}>${p}</option>`).join('')}
+        </select>
+        <span class="cp-group" title="${proxy.label||proxy.part}">G${partGroups[proxy.part]??1}${proxy.type==='hull'&&proxy.label?.includes('hull 2')?' ②':''}</span>
+        <select class="cp-type" data-id="${proxy.id}">
+          <option value="box" ${proxy.type==='box'?'selected':''}>Box</option>
+          <option value="cylinder" ${proxy.type==='cylinder'?'selected':''}>Cyl</option>
+          <option value="sphere" ${proxy.type==='sphere'?'selected':''}>Sphere</option>
+          <option value="hull" ${proxy.type==='hull'?'selected':''}>Hull ✓</option>
+        </select>
+        <button class="del-btn" data-id="${proxy.id}">×</button>
+      </div>
+      <div class="coll-proxy-row2">
+        <span class="coll-size-label">W/R</span>
+        <input class="cp-sx cp-num" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="Width/Radius" ${proxy.type==='hull'?'disabled':''}>
+        <span class="coll-size-label">H</span>
+        <input class="cp-sy cp-num" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="Height" ${proxy.type==='hull'?'disabled':''}>
+        <span class="coll-size-label">D</span>
+        <input class="cp-sz cp-num" type="number" data-id="${proxy.id}" value="${proxy.sz||proxy.sx}" step="1" min="1" title="Depth (box only)" ${proxy.type!=='box'?'disabled':''}>
+        <span class="coll-size-label">off</span>
+        <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0" ${proxy.type==='hull'?'disabled':''}>
+      </div>
+    `;
+    container.appendChild(row);
+    // Click row to select proxy and show gizmo
+    row.addEventListener('mousedown', e=>{
+      if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.classList.contains('del-btn')) return;
+      selectProxy(proxy.id);
+    });
+  }
+  // Wire events
+  container.querySelectorAll('.cp-part,.cp-type,.cp-sx,.cp-sy,.cp-sz,.cp-off').forEach(el=>{
+    el.addEventListener('change', e=>updateProxy(e.target));
+    el.addEventListener('input', e=>updateProxy(e.target));
+  });
+  container.querySelectorAll('.del-btn').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const id=parseInt(e.target.dataset.id);
+      collProxies=collProxies.filter(p=>p.id!==id);
+      if(proxyMeshes[id]){
+        if(proxyMeshes[id].parent) proxyMeshes[id].parent.remove(proxyMeshes[id]);
+        proxyMeshes[id].traverse(c=>{if(c.geometry)c.geometry.dispose();});
+        delete proxyMeshes[id];
+      }
+      renderProxyList();
+    });
+  });
+}
+
+function updateProxy(el){
+  const id=parseInt(el.dataset.id);
+  const proxy=collProxies.find(p=>p.id===id); if(!proxy) return;
+  if(el.classList.contains('cp-part')) proxy.part=el.value;
+  if(el.classList.contains('cp-type')){
+    proxy.type=el.value;
+    rebuildProxyWireframes();
+    renderProxyList(); // re-render to update disabled states
+    return;
+  }
+  if(el.classList.contains('cp-sx'))  proxy.sx=parseFloat(el.value)||10;
+  if(el.classList.contains('cp-sy'))  proxy.sy=parseFloat(el.value)||10;
+  if(el.classList.contains('cp-sz'))  proxy.sz=parseFloat(el.value)||10;
+  if(el.classList.contains('cp-off')){
+    const parts=el.value.split(',').map(v=>parseFloat(v.trim())||0);
+    proxy.ox=parts[0]||0; proxy.oy=parts[1]||0; proxy.oz=parts[2]||0;
+  }
+  rebuildProxyWireframes();
+}
+
+
+// ── Gizmo touch support (mobile) ─────────────────────────────────
+cvWrap.addEventListener('touchstart', e => {
+  if(!collConfigOpen || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const ax = getGizmoHit(t);
+  if(!ax) return;
+  gizmoDragging = true;
+  gizmoAxis = ax;
+  gizmoPrevEvent = { clientX: t.clientX, clientY: t.clientY };
+  const proxy = collProxies.find(p => p.id === selectedProxyId);
+  if(proxy) gizmoProxyStart = { ox: proxy.ox||0, oy: proxy.oy||0, oz: proxy.oz||0 };
+  e.preventDefault();
+  e.stopPropagation();
+}, { passive: false });
+
+window.addEventListener('touchmove', e => {
+  if(!gizmoDragging || !gizmoAxis || selectedProxyId === null) return;
+  const t = e.touches[0];
+  const proxy = collProxies.find(p => p.id === selectedProxyId);
+  if(!proxy) return;
+  const delta = screenToAxisDelta(t, gizmoPrevEvent, gizmoAxis);
+  gizmoPrevEvent = { clientX: t.clientX, clientY: t.clientY };
+  proxy.ox = (proxy.ox||0) + (gizmoAxis==='x' ? delta : 0);
+  proxy.oy = (proxy.oy||0) + (gizmoAxis==='y' ? delta : 0);
+  proxy.oz = (proxy.oz||0) + (gizmoAxis==='z' ? delta : 0);
+  if(gizmoGroup) gizmoGroup.position.set(proxy.ox, proxy.oy, proxy.oz);
+  const mesh = proxyMeshes[proxy.id];
+  if(mesh) mesh.position.set(proxy.ox, proxy.oy, proxy.oz);
+  const offEl = document.querySelector(`.cp-off[data-id="${proxy.id}"]`);
+  if(offEl) offEl.value = `${proxy.ox.toFixed(1)},${proxy.oy.toFixed(1)},${proxy.oz.toFixed(1)}`;
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener('touchend', e => {
+  if(gizmoDragging) {
+    gizmoDragging = false;
+    gizmoAxis = null;
+    gizmoPrevEvent = null;
+  }
+});
+
+// ── Modal wiring ──────────────────────────────────────────────────
+document.getElementById('collBtn').addEventListener('click',()=>{
+  collConfigOpen=true;
+  setProxyWireframesVisible(true); // always show when modal opens
+  // Populate groups bar
+  const bar=document.getElementById('coll-groups-bar');
+  bar.innerHTML='<span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>';
+  [...MACHINE_PARTS.filter(p=>p!=='Frame'), PRINT_PART].forEach(p=>{
+    const wrap=document.createElement('div');
+    wrap.style.cssText='display:flex;align-items:center;gap:4px;font-size:11px;';
+    const lbl=document.createElement('span');
+    lbl.style.cssText='color:var(--text1);font-family:var(--mono);';
+    lbl.textContent=p;
+    const sel=document.createElement('select');
+    sel.id='grp-'+p;
+    sel.style.cssText='background:var(--bg3);border:1px solid var(--border-hi);color:var(--text0);font-family:var(--mono);font-size:10px;padding:2px 4px;border-radius:3px;';
+    [['0','Off'],['1','G1'],['2','G2'],['3','G3']].forEach(([v,l])=>{
+      const o=document.createElement('option');
+      o.value=v; o.textContent=l;
+      if((partGroups[p]??1)===parseInt(v)) o.selected=true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change',()=>{ partGroups[p]=parseInt(sel.value); });
+    wrap.appendChild(lbl); wrap.appendChild(sel);
+    bar.appendChild(wrap);
+  });
+  const hint=document.createElement('span');
+  hint.style.cssText='font-size:10px;color:var(--text2);margin-left:4px;';
+  hint.textContent='Only cross-group pairs checked';
+  bar.appendChild(hint);
+  renderProxyList();
+  document.getElementById('coll-overlay').classList.add('open');
+});
+document.getElementById('collClose').addEventListener('click',()=>{
+  collConfigOpen=false;
+  clearPartHighlight();
+  selectProxy(null);
+  setProxyWireframesVisible(shouldShowProxies());
+  document.getElementById('coll-overlay').classList.remove('open');
+});
+// coll-overlay: close on backdrop tap
+// coll-overlay is now a side panel — close via × button only
+
+// Collision panel is now a fixed left-side drawer — no drag needed
+
+document.getElementById('coll-show-proxies').addEventListener('change',function(){
+  setProxyWireframesVisible(this.checked);
+});
+const _collPrintEl = document.getElementById('coll-print-enabled');
+if(_collPrintEl) _collPrintEl.addEventListener('change', function(){
+  clearPrintHull();
+});
+document.getElementById('coll-enabled').addEventListener('change',function(){
+  collisionEnabled=this.checked;
+});
+
+document.getElementById('coll-add-btn').addEventListener('click',()=>{
+  const part = selectedPart || MACHINE_PARTS[0];
+  collProxies.push({id:nextProxyId++, part, type:'box', sx:30, sy:30, sz:30, ox:0, oy:0, oz:0});
+  renderProxyList();
+  rebuildProxyWireframes();
+});
+
+document.getElementById('coll-auto-btn').addEventListener('click',()=>{
+  autoGenerateHulls();
+});
+document.getElementById('coll-check-btn').addEventListener('click',()=>checkCollisions());
+
+document.getElementById('coll-export-btn').addEventListener('click',()=>{
+  const json=JSON.stringify({proxies:collProxies, groups:partGroups},null,2);
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(json);
+  a.download='collision.json'; a.click();
+});
+
+document.getElementById('coll-import-btn').addEventListener('click',()=>document.getElementById('coll-import-file').click());
+document.getElementById('coll-import-file').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      collProxies=(data.proxies||[]).map(p=>({...p,id:nextProxyId++}));
+      if(data.groups) Object.assign(partGroups, data.groups);
+      rebuildProxyWireframes();
+      renderProxyList();
+      document.getElementById('coll-status').textContent=`Loaded ${collProxies.length} proxies`;
+    }catch(err){document.getElementById('coll-status').textContent='Import failed: '+err.message;}
+  };
+  r.readAsText(f);
+  e.target.value='';
+});
+
+initThree();
+initStaticSceneLate();
+fetchMachineList();
+
+// Lock to landscape on mobile
+if(screen.orientation && screen.orientation.lock){
+  screen.orientation.lock('landscape').catch(()=>{});
+}
+
+// ── Fullscreen toggle ─────────────────────────────────────────────
+(function(){
+  const btn = document.getElementById('fsBtn');
+  if(!btn) return;
+
+  function isFS(){
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function updateBtn(){
+    btn.textContent = isFS() ? '⛶' : '⛶';
+    btn.title = isFS() ? 'Exit fullscreen' : 'Enter fullscreen';
+    btn.classList.toggle('active', isFS());
+  }
+
+  btn.addEventListener('click', ()=>{
+    const el = document.documentElement;
+    if(!isFS()){
+      (el.requestFullscreen || el.webkitRequestFullscreen || (()=>{})).call(el).catch(()=>{});
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || (()=>{})).call(document).catch(()=>{});
+    }
+  });
+
+  document.addEventListener('fullscreenchange', updateBtn);
+  document.addEventListener('webkitfullscreenchange', updateBtn);
+  updateBtn();
+})();
+
+// ── Axis jog panel ────────────────────────────────────────────────
+const JOG_AXES = [
+  {key:'x', label:'X', color:'var(--ax-x)', min:-50, max:50,  step:0.1,  unit:'mm', deg:false},
+  {key:'y', label:'Y', color:'var(--ax-y)', min:-50, max:50,  step:0.1,  unit:'mm', deg:false},
+  {key:'z', label:'Z', color:'var(--ax-z)', min:0,   max:90,  step:0.1,  unit:'mm', deg:false},
+  {key:'b', label:'B', color:'var(--ax-b)', min:-120,max:32,  step:0.5,  unit:'°',  deg:true},
+  {key:'c', label:'C', color:'var(--ax-c)', min:-360,max:360, step:1,    unit:'°',  deg:true},
+];
+
+// Jog state — current manual positions
+const HOME_POS = {x:0, y:0, z:80, b:0, c:0};
+let jogPos = {...HOME_POS};
+let jogActive = false; // true when in jog mode (playback paused)
+let isJogging = false;  // true while applyJogPosition is running
+
+function buildJogPanel(){
+  const container = document.getElementById('jog-axes');
+  container.innerHTML = '';
+  for(const ax of JOG_AXES){
+    const div = document.createElement('div');
+    div.className = 'jog-axis';
+    div.innerHTML = `
+      <div class="jog-axis-head">
+        <span class="jog-axis-name" style="color:${ax.color}">${ax.label}</span>
+        <span class="jog-axis-val" id="jog-val-${ax.key}">${jogPos[ax.key].toFixed(ax.deg?1:3)} ${ax.unit}</span>
+      </div>
+      <input type="range" class="jog-slider" id="jog-${ax.key}"
+        min="${ax.min}" max="${ax.max}" step="${ax.step}" value="${jogPos[ax.key]}"
+        style="background:var(--bg4);"
+        oninput="onJogInput('${ax.key}', this.value)">
+      <div class="jog-range-labels"><span>${ax.min}${ax.unit}</span><span>${ax.max}${ax.unit}</span></div>
+    `;
+    // Style slider thumb color
+    const style = document.createElement('style');
+    style.textContent = `#jog-${ax.key}::-webkit-slider-thumb { background: ${ax.color}; }`;
+    div.appendChild(style);
+    container.appendChild(div);
+  }
+}
+
+function onJogInput(key, val){
+  if(isPlaying) return; // only when paused
+  jogPos[key] = parseFloat(val);
+  document.getElementById(`jog-val-${key}`).textContent =
+    jogPos[key].toFixed(JOG_AXES.find(a=>a.key===key)?.deg ? 1 : 3) + ' ' +
+    (JOG_AXES.find(a=>a.key===key)?.unit||'');
+  applyJogPosition();
+}
+
+function applyJogPosition(){
+  // Update axis readout
+  document.getElementById('ax-x').textContent = jogPos.x.toFixed(3);
+  document.getElementById('ax-y').textContent = jogPos.y.toFixed(3);
+  document.getElementById('ax-z').textContent = jogPos.z.toFixed(3);
+  document.getElementById('ax-b').textContent = jogPos.b.toFixed(1)+'°';
+  document.getElementById('ax-c').textContent = jogPos.c.toFixed(1)+'°';
+  updateAxisBars({mx:jogPos.x,my:jogPos.y,mz:jogPos.z,mb:jogPos.b,mc:jogPos.c,me:0});
+
+  // Update nozzle and bed
+  const fakeMove = {mx:jogPos.x,my:jogPos.y,mz:jogPos.z,mb:jogPos.b,mc:jogPos.c,me:0};
+  // Temporarily inject into allMoves[0] slot for update functions
+  const saved = allMoves[0];
+  allMoves[0] = fakeMove;
+  updateNozzlePositionFromMove(fakeMove);
+  updateBedRotationFromMove(fakeMove);
+  updateMachineFromMove(fakeMove);
+  // Force Three.js to recalculate world matrices before collision check.
+  // NOTE: restore allMoves[0] AFTER checkCurrentMove so buildPrintHull
+  // reads the correct moveIdx (prog bar position) against the actual
+  // printed geometry, while the machine is posed at the jog position.
+  scene.updateMatrixWorld(true);
+  checkCurrentMove(); // includes print hull vs machine check
+  if(saved !== undefined) allMoves[0] = saved;
+}
+
+// Jog-aware versions that take a move directly
+function updateNozzlePositionFromMove(m){
+  if(!nozzleMesh) return;
+  const usePart = document.getElementById('viewMode').value==='part';
+  if(usePart){
+    const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
+    nozzleMesh.position.set(wx,wz,-wy);
+    nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180,m.mc*Math.PI/180));
+  } else {
+    nozzleMesh.position.set(m.mx,0,-m.my);
+    nozzleMesh.quaternion.set(0,0,0,1);
+  }
+}
+function updateBedRotationFromMove(m){
+  const usePart = document.getElementById('viewMode').value==='part';
+  if(usePart||!m){bedGroup.quaternion.set(0,0,0,1);bedGroup.position.set(0,0,0);return;}
+  bedGroup.quaternion.copy(calcBedQuat(m.mb*Math.PI/180,m.mc*Math.PI/180));
+  bedGroup.position.set(0,-m.mz,0);
+}
+function updateMachineFromMove(m){
+  if(!machineLoaded||!machineGroup.parent) return;
+  machineGroup.visible=document.getElementById('showMach').checked;
+  if(!machineGroup.visible) return;
+  const ox=parseFloat(document.getElementById('mc-ox').value)||0;
+  const oy=parseFloat(document.getElementById('mc-oy').value)||0;
+  const oz=parseFloat(document.getElementById('mc-oz').value)||0;
+  machineGroup.position.set(ox,oz,-oy);
+  if(mGrp.Z) mGrp.Z.position.set(0,-m.mz,0);
+  if(mGrp.B){mGrp.B.rotation.set(0,0,0);mGrp.B.rotateZ(-m.mb*Math.PI/180);}
+  if(mGrp.C){mGrp.C.rotation.set(0,0,0);mGrp.C.rotateY(m.mc*Math.PI/180);}
+  if(mGrp.Y) mGrp.Y.position.set(0,0,-m.my);
+  if(mGrp.X) mGrp.X.position.set(m.mx,0,0);
+}
+
+function setJogEnabled(enabled){
+  const panel = document.getElementById('jog-axes');
+  panel.classList.toggle('jp-disabled', !enabled);
+  document.getElementById('jog-home-btn').classList.toggle('jp-disabled', !enabled);
+  document.getElementById('jog-status').textContent = enabled ? 'ACTIVE' : 'PAUSED';
+  document.getElementById('jog-status').style.color = enabled ? 'var(--green)' : 'var(--amber)';
+}
+
+
+function goHome(){
+  jogPos = {...HOME_POS};
+  JOG_AXES.forEach(ax=>{
+    const el=document.getElementById('jog-'+ax.key);
+    if(el) el.value=jogPos[ax.key];
+    const vEl=document.getElementById('jog-val-'+ax.key);
+    if(vEl) vEl.textContent=jogPos[ax.key].toFixed(ax.deg?1:3)+' '+(ax.unit||'');
+  });
+  applyJogPosition();
+}
+document.getElementById('jog-home-btn').addEventListener('click',()=>{
+  if(isPlaying) return;
+  goHome();
+});
+
+// Sync jog sliders when progress scrubs to a position
+function syncJogFromMove(m){
+  if(!m) return;
+  jogPos.x=m.mx; jogPos.y=m.my; jogPos.z=m.mz; jogPos.b=m.mb; jogPos.c=m.mc;
+  JOG_AXES.forEach(ax=>{
+    const el=document.getElementById('jog-'+ax.key);
+    if(el) el.value=jogPos[ax.key];
+    const vEl=document.getElementById('jog-val-'+ax.key);
+    if(vEl) vEl.textContent=jogPos[ax.key].toFixed(ax.deg?1:3)+' '+(ax.unit||'');
+  });
+}
+
+buildJogPanel();
+setJogEnabled(false); // disabled until playback pauses
+const REPO_API = 'https://api.github.com/repos/Koaladeen/5-axis-3D-print-G-code-simulator/contents/Example%20G-Codes';
+const REPO_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-print-G-code-simulator/main/Example%20G-Codes';
+
+(async()=>{
+  try{
+    const res = await fetch(REPO_API);
+    if(!res.ok) throw new Error('GitHub API '+res.status);
+    const files = await res.json();
+    const sel = document.getElementById('exampleSelect');
+    files
+      .filter(f=>f.type==='file' && /\.(gcode|nc|txt|g)$/i.test(f.name))
+      .forEach(f=>{
+        const opt=document.createElement('option');
+        opt.value=f.name;
+        opt.textContent=f.name;
+        sel.appendChild(opt);
+      });
+  }catch(e){
+    // CORS only works when hosted — silently hide dropdown when running locally
+    const sel=document.getElementById('exampleSelect');
+    sel.style.display='none';
+    console.info('Example files unavailable (open via GitHub Pages to use):', e.message);
+  }
+})();
+
+document.getElementById('exampleSelect').addEventListener('change', async function(){
+  const name=this.value; if(!name) return;
+  document.getElementById('tb-status').textContent='fetching…';
+  document.getElementById('tb-fname').textContent=name;
+  try{
+    const res = await fetch(`${REPO_RAW}/${encodeURIComponent(name)}`);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    cachedText=await res.text();
+    rebuildAll(true);
+  }catch(e){
+    document.getElementById('tb-status').textContent='fetch failed';
+    console.error(e);
+  }
+  this.value='';
+});
+// ── Version check & service worker ───────────────────────────────
+(function(){
+  const CURRENT_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0.0.0';
+  const banner     = document.getElementById('update-banner');
+  const reloadBtn  = document.getElementById('ub-reload-btn');
+  const dismissBtn = document.getElementById('ub-dismiss-btn');
+
+  // Show banner and wire up buttons
+  function showUpdateBanner(){
+    if(banner) banner.classList.add('visible');
+  }
+  if(reloadBtn) reloadBtn.addEventListener('click', () => {
+    if(navigator.serviceWorker?.controller){
+      navigator.serviceWorker.controller.postMessage({type:'SKIP_WAITING'});
+    }
+    window.location.reload(true);
+  });
+  if(dismissBtn) dismissBtn.addEventListener('click', () => {
+    if(banner) banner.classList.remove('visible');
+  });
+
+  if(!('serviceWorker' in navigator)) return;
+  // Only register SW on the real deployment domain, not preview/sandbox environments
+  const allowedOrigins = ['https://koaladeen.github.io'];
+  if(!allowedOrigins.some(o => location.origin === o || location.origin.startsWith(o))) return;
+
+  // Register the service worker
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+
+    // If a new SW is waiting right away (e.g. hard refresh found a queued update)
+    if(reg.waiting) { showUpdateBanner(); return; }
+
+    // If a new SW starts installing, wait for it to reach 'waiting'
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
+          showUpdateBanner();
+        }
+      });
+    });
+
+  }).catch(err => console.warn('SW registration failed:', err));
+
+  // Also do a lightweight version fetch ourselves — catches cases where the SW
+  // didn't update yet but the live file already has a newer version stamp.
+  // Uses cache:no-store so it always hits the network.
+  async function checkVersionViaFetch(){
+    try {
+      const res = await fetch(window.location.href, {cache:'no-store', method:'GET'});
+      if(!res.ok) return;
+      const html = await res.text();
+      const match = html.match(/<meta\s+name="app-version"\s+content="([^"]+)"/);
+      if(match && match[1] !== CURRENT_VERSION){
+        showUpdateBanner();
+      }
+    } catch(e){ /* offline — silent */ }
+  }
+
+  // Check once on load (after a short delay so it doesn't compete with startup)
+  // and then every 5 minutes while the tab stays open.
+
+
+// ── machine.json export / import ──────────────────────────────────
+function collectMachineConfig() {
+  const val  = id => { const el=document.getElementById(id); return el ? (el.type==='checkbox' ? el.checked : el.value) : null; };
+  const num  = id => parseFloat(val(id));
+  const parts = ['Frame','Z','B','C','Y','X'];
+  return {
+    _version: 1,
+    buildplate: {
+      w: num('s-bp-w'), d: num('s-bp-d'), t: num('s-bp-t'),
+      color: val('s-bp-col'), visible: val('s-bp-vis')
+    },
+    nozzle: {
+      tip: num('s-nz-tip'), base: num('s-nz-base'),
+      angle: num('s-nz-ang'), length: num('s-nz-len'),
+      color: val('s-nz-col'), visible: val('s-nz-vis')
+    },
+    limits: {
+      x: { min: num('lim-xmin'), max: num('lim-xmax') },
+      y: { min: num('lim-ymin'), max: num('lim-ymax') },
+      z: { min: num('lim-zmin'), max: num('lim-zmax') },
+      b: { min: num('lim-bmin'), max: num('lim-bmax') },
+      c: { min: num('lim-cmin'), max: num('lim-cmax') }
+    },
+    machineOffset: { x: num('mc-ox'), y: num('mc-oy'), z: num('mc-oz') },
+    machineAppearance: Object.fromEntries(parts.map(p => [p, {
+      color:   val('mc-'+p+'-col'),
+      opacity: parseFloat(val('mc-'+p+'-op'))
+    }])),
+    nozzleDiameter: parseFloat(document.getElementById('nozzle')?.value || 0.4),
+    collisionProxies: collProxies.map(({id:_,...rest}) => rest),
+    collisionEnabled:    document.getElementById('coll-enabled')?.checked,
+    collisionShowProxy:  document.getElementById('coll-show-proxies')?.checked,
+    collisionPrintMesh:  document.getElementById('coll-print-enabled')?.checked,
+  };
+}
+
+function applyMachineConfig(cfg) {
+  if(!cfg || cfg._version !== 1) { alert('Invalid or incompatible machine.json'); return; }
+  const set = (id, v) => { const el=document.getElementById(id); if(!el) return; el.type==='checkbox' ? el.checked=v : el.value=v; };
+
+  const bp = cfg.buildplate || {};
+  set('s-bp-w', bp.w); set('s-bp-d', bp.d); set('s-bp-t', bp.t);
+  set('s-bp-col', bp.color); set('s-bp-vis', bp.visible);
+  document.getElementById('chip-bp')?.classList.toggle('on', !!bp.visible);
+
+  const nz = cfg.nozzle || {};
+  set('s-nz-tip', nz.tip); set('s-nz-base', nz.base);
+  set('s-nz-ang', nz.angle); set('s-nz-len', nz.length);
+  set('s-nz-col', nz.color); set('s-nz-vis', nz.visible);
+  document.getElementById('chip-nz')?.classList.toggle('on', !!nz.visible);
+
+  const lim = cfg.limits || {};
+  ['x','y','z','b','c'].forEach(ax => {
+    if(lim[ax]) { set('lim-'+ax+'min', lim[ax].min); set('lim-'+ax+'max', lim[ax].max); }
+  });
+
+  const mo = cfg.machineOffset || {};
+  set('mc-ox', mo.x ?? 0); set('mc-oy', mo.y ?? 0); set('mc-oz', mo.z ?? 0);
+
+  const ma = cfg.machineAppearance || {};
+  ['Frame','Z','B','C','Y','X'].forEach(p => {
+    if(ma[p]) { set('mc-'+p+'-col', ma[p].color); set('mc-'+p+'-op', ma[p].opacity); }
+  });
+
+  if(cfg.nozzleDiameter != null) {
+    set('nozzle', cfg.nozzleDiameter);
+    set('mob-nozzle', cfg.nozzleDiameter);
+  }
+
+  if(cfg.collisionProxies) {
+    collProxies = cfg.collisionProxies.map(p => ({...p, id: nextProxyId++}));
+    rebuildProxyWireframes();
+    renderProxyList();
+  }
+  if(cfg.collisionEnabled != null)   set('coll-enabled',     cfg.collisionEnabled);
+  if(cfg.collisionShowProxy != null) set('coll-show-proxies', cfg.collisionShowProxy);
+  if(cfg.collisionPrintMesh != null) set('coll-print-enabled', cfg.collisionPrintMesh);
+
+  // Apply all the visual changes
+  buildBuildplate();
+  buildNozzle();
+  checkLimits();
+  applyMachineAppearance();
+  updateMachine(0);
+}
+
+document.getElementById('s-export-btn').addEventListener('click', () => {
+  const cfg = collectMachineConfig();
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'machine.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+
+document.getElementById('s-import-btn').addEventListener('click', () => {
+  document.getElementById('s-import-file').click();
+});
+
+document.getElementById('s-import-file').addEventListener('change', function() {
+  const file = this.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const cfg = JSON.parse(e.target.result);
+      applyMachineConfig(cfg);
+      document.getElementById('settings-overlay').classList.remove('open');
+    } catch(err) {
+      alert('Failed to parse machine.json: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  this.value = '';
+});
+
+// ── Mobile drawer system ──────────────────────────────────────────
+(function(){
+  const isMob = () => window.innerWidth <= 900;
+  let activeDrawer = null;
+
+  window.mobDrawer = function(name) {
+    if(!isMob()) return;
+    const drawer = document.getElementById('mob-drawer-' + name);
+    if(!drawer) return;
+
+    // Same button again = close
+    if(activeDrawer === name) { mobDrawerClose(); return; }
+
+    // Switch to new panel
+    document.querySelectorAll('.mob-drawer').forEach(d => d.classList.remove('open'));
+    document.querySelectorAll('.mob-dock-btn').forEach(b => b.classList.remove('active'));
+
+    drawer.classList.add('open');
+    const btn = document.getElementById('mdBtn-' + name);
+    if(btn) btn.classList.add('active');
+    activeDrawer = name;
+
+    // Sync content when opening
+    if(name === 'gcode') syncMobGcode();
+    if(name === 'axes') syncMobAxes();
+    if(name === 'info') syncMobInfo();
+    if(name === 'coll') syncMobColl();
+  };
+
+  window.mobDrawerClose = function() {
+    document.querySelectorAll('.mob-drawer').forEach(d => d.classList.remove('open'));
+    document.querySelectorAll('.mob-dock-btn').forEach(b => b.classList.remove('active'));
+    activeDrawer = null;
+  };
+
+  // ── Sync axis readouts to mobile drawer ──
+  window.syncMobAxes = function() {
+    const ids = ['x','y','z','b','c','e'];
+    ids.forEach(id => {
+      const src = document.getElementById('ax-' + id);
+      const dst = document.getElementById('mob-ax-' + id);
+      if(src && dst) dst.textContent = src.textContent;
+      const bsrc = document.getElementById('ax-bar-' + id);
+      const bdst = document.getElementById('mob-ax-bar-' + id);
+      if(bsrc && bdst) bdst.style.width = bsrc.style.width;
+    });
+    const tl = document.getElementById('type-label');
+    const mtl = document.getElementById('mob-type-label');
+    if(tl && mtl) mtl.textContent = tl.textContent;
+    const td = document.getElementById('type-dot');
+    const mtd = document.getElementById('mob-type-dot');
+    if(td && mtd) mtd.style.background = td.style.background;
+  };
+
+  // ── Sync stats/print state ──
+  window.syncMobInfo = function() {
+    const pairs = [['c3ax','mob-c3ax'],['c5ax','mob-c5ax'],['ctrav','mob-ctrav'],['ctot','mob-ctot'],
+                   ['ps-pos','mob-ps-pos'],['ps-emode','mob-ps-emode'],['ps-fan','mob-ps-fan'],
+                   ['ps-hotend','mob-ps-hotend'],['ps-bed','mob-ps-bed']];
+    pairs.forEach(([src,dst]) => {
+      const s = document.getElementById(src), d = document.getElementById(dst);
+      if(s && d) { d.textContent = s.textContent; if(s.style.color) d.style.color = s.style.color; }
+    });
+  };
+
+  // ── Sync g-code view ──
+  window.syncMobGcode = function() {
+    const src = document.getElementById('gcode-ctx');
+    const dst = document.getElementById('mob-gcode-ctx');
+    if(src && dst) { dst.innerHTML = src.innerHTML; dst.scrollTop = src.scrollTop; }
+  };
+
+  // ── Sync violations ──
+  window.syncMobColl = function() {
+    const src = document.getElementById('coll-report');
+    const dst = document.getElementById('mob-coll-report');
+    if(src && dst) dst.innerHTML = src.innerHTML;
+  };
+
+  // Patch updateAxisBars to also update mob axes when drawer open
+  const _origUpdateAxisBars = window.updateAxisBars;
+  if(_origUpdateAxisBars) {
+    window.updateAxisBars = function(move) {
+      _origUpdateAxisBars(move);
+      if(activeDrawer === 'axes') syncMobAxes();
+    };
+  }
+
+  // ── Patch renderViolationPanel to update dock alert dot + mob coll ──
+  const _origRVP = window.renderViolationPanel;
+  if(_origRVP) {
+    window.renderViolationPanel = function() {
+      _origRVP();
+      const hasViol = (window._collisionViolations||[]).length > 0 || (window._limitViolations||[]).length > 0;
+      const btn = document.getElementById('mdBtn-coll');
+      if(btn) btn.classList.toggle('coll-alert', hasViol);
+      if(activeDrawer === 'coll') syncMobColl();
+    };
+  }
+
+  // ── Jog panel in drawer ──
+  // Build jog sliders into mob-drawer-jog
+  function buildMobJog() {
+    if(!isMob()) return;
+    if(typeof JOG_AXES === 'undefined') { setTimeout(buildMobJog, 200); return; }
+    const container = document.getElementById('mob-jog-axes');
+    if(!container) return;
+    container.innerHTML = '';
+    JOG_AXES.forEach(ax => {
+      const div = document.createElement('div');
+      div.className = 'jog-axis';
+      div.innerHTML = `
+        <div class="jog-axis-head">
+          <span class="jog-axis-name" style="color:${ax.color}">${ax.label}</span>
+          <span class="jog-axis-val" id="mob-jog-val-${ax.key}">${(jogPos||{})[ax.key]?.toFixed(ax.deg?1:3)??'0'} ${ax.unit}</span>
+        </div>
+        <input type="range" class="jog-slider" id="mob-jog-${ax.key}"
+          min="${ax.min}" max="${ax.max}" step="${ax.step}" value="${(jogPos||{})[ax.key]??0}"
+          oninput="onJogInput('${ax.key}', this.value); document.getElementById('jog-${ax.key}')&&(document.getElementById('jog-${ax.key}').value=this.value);">
+        <div class="jog-range-labels"><span>${ax.min}${ax.unit}</span><span>${ax.max}${ax.unit}</span></div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  // Hook home button in drawer
+  const homeBtn = document.getElementById('jog-home-btn-mob');
+  if(homeBtn) homeBtn.addEventListener('click', () => {
+    const origBtn = document.getElementById('jog-home-btn');
+    if(origBtn) origBtn.click();
+    // Sync sliders back
+    if(typeof JOG_AXES !== 'undefined') {
+      JOG_AXES.forEach(ax => {
+        const sl = document.getElementById('mob-jog-' + ax.key);
+        const vl = document.getElementById('mob-jog-val-' + ax.key);
+        if(sl && vl && typeof jogPos !== 'undefined') {
+          sl.value = jogPos[ax.key];
+          vl.textContent = jogPos[ax.key].toFixed(ax.deg?1:3) + ' ' + ax.unit;
+        }
+      });
+    }
+  });
+
+  // Patch onJogInput to also update mob jog val label
+  const _origJog = window.onJogInput;
+  if(_origJog) {
+    window.onJogInput = function(key, val) {
+      _origJog(key, val);
+      const vl = document.getElementById('mob-jog-val-' + key);
+      const ax = typeof JOG_AXES !== 'undefined' ? JOG_AXES.find(a=>a.key===key) : null;
+      if(vl && ax) vl.textContent = parseFloat(val).toFixed(ax.deg?1:3) + ' ' + ax.unit;
+    };
+  }
+
+  // ── Display drawer — mirror checkboxes/selects to the main hidden ones ──
+  function mirrorToggle(mobId, mainId) {
+    const mob = document.getElementById(mobId);
+    const main = document.getElementById(mainId);
+    if(!mob || !main) return;
+    mob.checked = main.checked;
+    mob.addEventListener('change', () => { main.checked = mob.checked; main.dispatchEvent(new Event('change')); });
+    main.addEventListener('change', () => { mob.checked = main.checked; });
+  }
+  function mirrorChip(mobChipId, mainChipId, mobCbId, mainCbId) {
+    const mobChip = document.getElementById(mobChipId);
+    const mainCb = document.getElementById(mainCbId);
+    if(!mobChip || !mainCb) return;
+    mobChip.classList.toggle('on', mainCb.checked);
+    const mobCb = document.getElementById(mobCbId);
+    if(mobCb) {
+      mobCb.checked = mainCb.checked;
+      mobCb.addEventListener('change', () => {
+        mainCb.checked = mobCb.checked;
+        mainCb.dispatchEvent(new Event('change'));
+        mobChip.classList.toggle('on', mobCb.checked);
+      });
+      mainCb.addEventListener('change', () => {
+        mobCb.checked = mainCb.checked;
+        mobChip.classList.toggle('on', mainCb.checked);
+      });
+    }
+  }
+
+  mirrorChip('mob-chip-se','chip-se','mob-se','se');
+  mirrorChip('mob-chip-s5','chip-s5','mob-s5','s5');
+  mirrorChip('mob-chip-st','chip-st','mob-st','st');
+  mirrorChip('mob-chip-sc','chip-sc','mob-sc','sc');
+  mirrorChip('mob-chip-mach','chip-mach','mob-showMach','showMach');
+
+  // Mirror example select into mob drawer
+  function syncExampleSelect() {
+    const main = document.getElementById('exampleSelect');
+    const mob  = document.getElementById('mob-exampleSelect');
+    if(!main || !mob) return;
+    mob.innerHTML = main.innerHTML;
+    mob.value = main.value;
+    mob.addEventListener('change', () => { main.value = mob.value; main.dispatchEvent(new Event('change')); mob.value = ''; });
+    main.addEventListener('change', () => { mob.value = main.value; });
+  }
+  setTimeout(syncExampleSelect, 800);
+
+  // Mirror machine select
+  function syncMachSelects() {
+    const main = document.getElementById('machineSelect');
+    const mob = document.getElementById('mob-machineSelect');
+    if(!main || !mob) return;
+    mob.innerHTML = main.innerHTML;
+    mob.value = main.value;
+    mob.addEventListener('change', () => { main.value = mob.value; main.dispatchEvent(new Event('change')); });
+    main.addEventListener('change', () => { mob.value = main.value; });
+  }
+  // Sync once machines are loaded (slight delay)
+  setTimeout(syncMachSelects, 1500);
+
+  // Mirror nozzle
+  const mobNozzle = document.getElementById('mob-nozzle');
+  const mainNozzle = document.getElementById('nozzle');
+  if(mobNozzle && mainNozzle) {
+    mobNozzle.value = mainNozzle.value;
+    mobNozzle.addEventListener('input', () => { mainNozzle.value = mobNozzle.value; mainNozzle.dispatchEvent(new Event('input')); });
+    mainNozzle.addEventListener('input', () => { mobNozzle.value = mainNozzle.value; });
+  }
+
+  // Build jog panel when JOG_AXES is ready
+  setTimeout(buildMobJog, 400);
+
+  // Periodic sync for open drawer
+  setInterval(() => {
+    if(!activeDrawer) return;
+    if(activeDrawer === 'axes') syncMobAxes();
+    if(activeDrawer === 'info') syncMobInfo();
+    if(activeDrawer === 'gcode') syncMobGcode();
+    if(activeDrawer === 'coll') syncMobColl();
+  }, 250);
+})();
+
+  setTimeout(checkVersionViaFetch, 4000);
+  setInterval(checkVersionViaFetch, 5 * 60 * 1000);
+})();
+</script>
+
 <!-- Update banner -->
 <div id="update-banner">
   <div class="ub-msg">
@@ -605,7 +4179,5 @@
   </div>
 </div>
 
-</body>
-</html>
 </body>
 </html>
