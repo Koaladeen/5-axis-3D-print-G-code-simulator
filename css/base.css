@@ -1,0 +1,49 @@
+/* Base: CSS variables, reset, layout grid */
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --vp-bg:    #b8bec6;   /* viewport — medium gray like Mastercam */
+    --ui-bg0:   #f0f1f2;   /* lightest — main panel bg */
+    --ui-bg1:   #e4e6e8;   /* toolbar / panel headers */
+    --ui-bg2:   #d8dadc;   /* section bg */
+    --ui-bg3:   #c8cacc;   /* input bg / pressed */
+    --ui-bg4:   #eaeced;   /* hover */
+    --border:   #a8aaac;
+    --border-hi:#888a8c;
+    --border-lt:#c8cacc;
+
+    --text0: #1a1c1e;   /* primary text — near black */
+    --text1: #3a3c3e;   /* secondary */
+    --text2: #6a6c6e;   /* muted */
+    --text3: #9a9c9e;   /* very muted */
+
+    --ax-x:  #c82020;
+    --ax-y:  #187818;
+    --ax-z:  #1858b8;
+    --ax-b:  #b06010;
+    --ax-c:  #7030a8;
+    --ax-e:  #186880;
+
+    --accent:     #1a5fa8;
+    --accent-hi:  #2878d0;
+    --accent-dim: rgba(26,95,168,0.12);
+    --green:  #1a7838;
+    --red:    #b82020;
+    --amber:  #a06010;
+    --teal:   #187868;
+
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  html, body {
+    height: 100%; overflow: hidden;
+    background: var(--ui-bg1); color: var(--text0);
+    font-family: var(--sans); font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #app { display: grid; grid-template-rows: 46px 1fr; height: 100vh; }
+
