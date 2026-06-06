@@ -361,7 +361,7 @@
 
   /* Collision modal */
   .coll-proxy {
-    display: grid; grid-template-columns: 72px 52px 62px 1fr 1fr 1fr 26px;
+    display: grid; grid-template-columns: 72px 52px 62px 1fr 1fr 1fr 1fr 26px;
     gap: 4px; align-items: center; padding: 5px 12px;
     border-bottom: 1px solid var(--border-lt);
   }
@@ -375,7 +375,7 @@
   .coll-proxy .del-btn:hover { color: var(--red); }
   #coll-footer { padding: 9px 12px; border-top: 1px solid var(--border); display: flex; gap: 7px; flex-wrap: wrap; background: var(--ui-bg1); }
   .coll-header-row {
-    display: grid; grid-template-columns: 72px 52px 62px 1fr 1fr 1fr 26px;
+    display: grid; grid-template-columns: 72px 52px 62px 1fr 1fr 1fr 1fr 26px;
     gap: 4px; padding: 4px 12px;
     font-size: 9px; font-family: var(--mono); color: var(--text2); font-weight: 600;
     letter-spacing: 0.08em; border-bottom: 1px solid var(--border); background: var(--ui-bg1);
@@ -513,7 +513,7 @@
   </div>
 
   <!-- Collision configurator modal -->
-  <div id="coll-overlay" class="modal-overlay">
+  <div id="coll-overlay">
     <div id="coll-modal" class="modal-box wide">
       <div class="modal-head">
         <span class="title">COLLISION PROXIES</span>
@@ -534,7 +534,7 @@
         <span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>
       </div>
       <div class="coll-header-row">
-        <span>PART</span><span>GROUP</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>OFFSET X,Y,Z</span><span></span>
+        <span>PART</span><span>GROUP</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>SZ</span><span>OFFSET X,Y,Z</span><span></span>
       </div>
       <div id="coll-list"></div>
       <div id="coll-footer">
@@ -913,7 +913,10 @@ function initStaticSceneLate(){
 
 const cvWrap = document.getElementById('cv-wrap');
 cvWrap.addEventListener('contextmenu',e=>e.preventDefault());
-cvWrap.addEventListener('mousedown',e=>{isDrag=true;isRightDrag=e.button===2;lastMX=e.clientX;lastMY=e.clientY;cv.style.cursor='grabbing';});
+cvWrap.addEventListener('mousedown',e=>{
+  if(collConfigOpen && getGizmoHit(e)){ e.stopImmediatePropagation(); return; }
+  isDrag=true;isRightDrag=e.button===2;lastMX=e.clientX;lastMY=e.clientY;cv.style.cursor='grabbing';
+});
 window.addEventListener('mouseup',()=>{isDrag=false;cv.style.cursor='grab';});
 window.addEventListener('mousemove',e=>{
   if(!isDrag) return;
@@ -2124,7 +2127,16 @@ cvWrap.addEventListener('mousedown',e=>{mouseDownPos={x:e.clientX,y:e.clientY};}
 cvWrap.addEventListener('click',e=>{
   if(!collConfigOpen||!machineLoaded) return;
   const dx=Math.abs(e.clientX-mouseDownPos.x), dy=Math.abs(e.clientY-mouseDownPos.y);
-  if(dx>4||dy>4) return; // was a drag, not a click
+  if(dx>4||dy>4) return;
+
+  // Don't deselect if clicking a gizmo handle
+  if(getGizmoHit(e)) return;
+
+  // Check if clicking a proxy mesh
+  const proxyId=getProxyHit(e);
+  if(proxyId!==null){ selectProxy(proxyId); return; }
+
+  // Try to select a machine part
   const rect=cvWrap.getBoundingClientRect();
   mouse2D.x=((e.clientX-rect.left)/rect.width)*2-1;
   mouse2D.y=-((e.clientY-rect.top)/rect.height)*2+1;
@@ -2136,6 +2148,7 @@ cvWrap.addEventListener('click',e=>{
     if(partName) highlightPart(partName);
   } else {
     clearPartHighlight();
+    selectProxy(null);
   }
 });
 
@@ -2318,7 +2331,247 @@ function checkCollisions(){
     violations.length?violations.length+' collision(s) detected':'No collisions detected';
 }
 
-// ── Configurator UI ───────────────────────────────────────────────
+// ── Proxy Transform Gizmo ─────────────────────────────────────────
+let selectedProxyId = null;
+let gizmoGroup = null;
+let gizmoDragging = false;
+let gizmoAxis = null; // 'x','y','z'
+let gizmoDragStart = null;
+let gizmoProxyStart = null;
+
+const GIZMO_COLORS = { x: 0xcc2020, y: 0x20aa40, z: 0x2060cc };
+const GIZMO_HOVER  = { x: 0xff6060, y: 0x60ff80, z: 0x60a0ff };
+const GIZMO_LENGTH = 40;
+const GIZMO_RADIUS = 1.2;
+
+function buildGizmo(proxy){
+  removeGizmo();
+  const grp = mGrp[proxy.part]; if(!grp) return;
+  gizmoGroup = new THREE.Group();
+  gizmoGroup.position.set(proxy.ox||0, proxy.oy||0, proxy.oz||0);
+
+  const axes = [
+    { key:'x', dir:[1,0,0], color:GIZMO_COLORS.x },
+    { key:'y', dir:[0,1,0], color:GIZMO_COLORS.y },
+    { key:'z', dir:[0,0,1], color:GIZMO_COLORS.z },
+  ];
+
+  for(const ax of axes){
+    // Shaft
+    const shaftGeo = new THREE.CylinderGeometry(GIZMO_RADIUS, GIZMO_RADIUS, GIZMO_LENGTH*0.75, 8);
+    const mat = new THREE.MeshLambertMaterial({color:ax.color, depthTest:false});
+    const shaft = new THREE.Mesh(shaftGeo, mat.clone());
+    shaft.renderOrder = 999;
+
+    // Cone tip
+    const coneGeo = new THREE.ConeGeometry(GIZMO_RADIUS*2.5, GIZMO_LENGTH*0.25, 8);
+    const cone = new THREE.Mesh(coneGeo, mat.clone());
+    cone.renderOrder = 999;
+
+    // Orient along axis
+    const handle = new THREE.Group();
+    if(ax.key==='x'){ handle.rotation.z = -Math.PI/2; }
+    else if(ax.key==='z'){ handle.rotation.x = Math.PI/2; }
+    // y is default (up)
+
+    shaft.position.y = GIZMO_LENGTH*0.75/2;
+    cone.position.y  = GIZMO_LENGTH*0.75 + GIZMO_LENGTH*0.25/2;
+    handle.add(shaft); handle.add(cone);
+    handle.userData = { gizmoAxis: ax.key, isGizmo: true };
+    shaft.userData = { gizmoAxis: ax.key, isGizmo: true };
+    cone.userData  = { gizmoAxis: ax.key, isGizmo: true };
+    gizmoGroup.add(handle);
+  }
+
+  // Center sphere
+  const cSph = new THREE.Mesh(
+    new THREE.SphereGeometry(GIZMO_RADIUS*2, 10, 8),
+    new THREE.MeshLambertMaterial({color:0xffffff, depthTest:false})
+  );
+  cSph.renderOrder = 999;
+  cSph.userData = { isGizmoCenter: true };
+  gizmoGroup.add(cSph);
+
+  grp.add(gizmoGroup);
+}
+
+function removeGizmo(){
+  if(gizmoGroup && gizmoGroup.parent){
+    gizmoGroup.parent.remove(gizmoGroup);
+    gizmoGroup.traverse(c=>{if(c.geometry)c.geometry.dispose();});
+  }
+  gizmoGroup = null;
+  selectedProxyId = null;
+}
+
+function selectProxy(id){
+  // Deselect previous
+  if(selectedProxyId !== null){
+    setProxyColliding(selectedProxyId, false);
+    const prev = collProxies.find(p=>p.id===selectedProxyId);
+    if(prev) setProxyHighlight(selectedProxyId, false);
+  }
+  selectedProxyId = id;
+  if(id === null){ removeGizmo(); return; }
+  const proxy = collProxies.find(p=>p.id===id);
+  if(!proxy){ removeGizmo(); return; }
+  setProxyHighlight(id, true);
+  buildGizmo(proxy);
+  // Scroll proxy into view in list
+  renderProxyList();
+  // Highlight row
+  setTimeout(()=>{
+    const rows = document.querySelectorAll('.coll-proxy');
+    rows.forEach((r,i)=>{
+      const sel = r.querySelector('.cp-part');
+      if(sel && parseInt(sel.dataset.id)===id){
+        r.style.background='rgba(26,95,168,0.15)';
+        r.scrollIntoView({block:'nearest'});
+      }
+    });
+  },50);
+}
+
+function setProxyHighlight(id, on){
+  const mesh = proxyMeshes[id]; if(!mesh) return;
+  mesh.traverse(c=>{
+    if(c.isMesh) c.material.opacity = on ? 0.5 : 0.22;
+    if(c.isLineSegments) c.material.opacity = on ? 0.9 : 0.5;
+  });
+}
+
+// Gizmo raycasting — check if mouse hits a gizmo handle
+const gizmoRay = new THREE.Raycaster();
+function getGizmoHit(e){
+  if(!gizmoGroup) return null;
+  const rect = cvWrap.getBoundingClientRect();
+  const mx = ((e.clientX-rect.left)/rect.width)*2-1;
+  const my = -((e.clientY-rect.top)/rect.height)*2+1;
+  gizmoRay.setFromCamera({x:mx,y:my}, camera);
+  const targets = [];
+  gizmoGroup.traverse(c=>{ if(c.isMesh && c.userData.isGizmo) targets.push(c); });
+  const hits = gizmoRay.intersectObjects(targets, false);
+  return hits.length>0 ? hits[0].object.userData.gizmoAxis : null;
+}
+
+function getProxyHit(e){
+  if(!collConfigOpen || !Object.keys(proxyMeshes).length) return null;
+  const rect = cvWrap.getBoundingClientRect();
+  const mx = ((e.clientX-rect.left)/rect.width)*2-1;
+  const my = -((e.clientY-rect.top)/rect.height)*2+1;
+  gizmoRay.setFromCamera({x:mx,y:my}, camera);
+  const targets = [];
+  for(const [id, mesh] of Object.entries(proxyMeshes)){
+    mesh.traverse(c=>{ if(c.isMesh){ c.userData._proxyId=parseInt(id); targets.push(c); } });
+  }
+  const hits = gizmoRay.intersectObjects(targets, false);
+  return hits.length>0 ? hits[0].object.userData._proxyId : null;
+}
+
+// Project world point onto screen axis for drag delta
+function screenToAxisDelta(e, prevE, axisKey){
+  // Get the axis direction in world space (from the part group)
+  if(!gizmoGroup) return 0;
+  const axes = { x: new THREE.Vector3(1,0,0), y: new THREE.Vector3(0,1,0), z: new THREE.Vector3(0,0,1) };
+  const axisWorld = axes[axisKey].clone().transformDirection(gizmoGroup.parent.matrixWorld).normalize();
+
+  // Project axis onto screen
+  const rect = cvWrap.getBoundingClientRect();
+  const W = rect.width, H = rect.height;
+
+  // Get gizmo center in screen space
+  const center = new THREE.Vector3();
+  gizmoGroup.getWorldPosition(center);
+  const c2 = center.clone().project(camera);
+  const cx = (c2.x+1)/2*W, cy = (-c2.y+1)/2*H;
+
+  // Get axis tip in screen space
+  const tip = center.clone().add(axisWorld.clone().multiplyScalar(50));
+  const t2 = tip.clone().project(camera);
+  const tx = (t2.x+1)/2*W, ty = (-t2.y+1)/2*H;
+
+  // Screen axis direction
+  const sax = tx-cx, say = ty-cy;
+  const slen = Math.sqrt(sax*sax+say*say);
+  if(slen<1) return 0;
+
+  // Mouse delta
+  const dx = e.clientX - prevE.clientX;
+  const dy = e.clientY - prevE.clientY;
+
+  // Project mouse delta onto screen axis
+  const screenDelta = (dx*sax + dy*say) / slen;
+
+  // Convert screen pixels to world units (approximate)
+  const worldScale = 1.5 * (camera.position.z * zoom) / Math.min(W, H);
+  return screenDelta * worldScale;
+}
+
+// ── Gizmo mouse events ────────────────────────────────────────────
+let gizmoPrevEvent = null;
+
+cvWrap.addEventListener('mousedown', e=>{
+  if(!collConfigOpen) return;
+  const ax = getGizmoHit(e);
+  if(ax){
+    gizmoDragging = true;
+    gizmoAxis = ax;
+    gizmoPrevEvent = {clientX:e.clientX, clientY:e.clientY};
+    const proxy = collProxies.find(p=>p.id===selectedProxyId);
+    if(proxy) gizmoProxyStart = {ox:proxy.ox||0, oy:proxy.oy||0, oz:proxy.oz||0};
+    e.stopPropagation(); // don't start orbit
+    return;
+  }
+});
+
+window.addEventListener('mousemove', e=>{
+  if(!gizmoDragging || !gizmoAxis || selectedProxyId===null) return;
+  const proxy = collProxies.find(p=>p.id===selectedProxyId);
+  if(!proxy) return;
+
+  const delta = screenToAxisDelta(e, gizmoPrevEvent, gizmoAxis);
+  gizmoPrevEvent = {clientX:e.clientX, clientY:e.clientY};
+
+  proxy.ox = (proxy.ox||0) + (gizmoAxis==='x' ? delta : 0);
+  proxy.oy = (proxy.oy||0) + (gizmoAxis==='y' ? delta : 0);
+  proxy.oz = (proxy.oz||0) + (gizmoAxis==='z' ? delta : 0);
+
+  // Update gizmo position
+  if(gizmoGroup) gizmoGroup.position.set(proxy.ox, proxy.oy, proxy.oz);
+
+  // Update proxy mesh position
+  const mesh = proxyMeshes[proxy.id];
+  if(mesh) mesh.position.set(proxy.ox, proxy.oy, proxy.oz);
+
+  // Update offset field in list
+  const offEl = document.querySelector(`.cp-off[data-id="${proxy.id}"]`);
+  if(offEl) offEl.value = `${proxy.ox.toFixed(1)},${proxy.oy.toFixed(1)},${proxy.oz.toFixed(1)}`;
+});
+
+window.addEventListener('mouseup', e=>{
+  if(gizmoDragging){
+    gizmoDragging = false;
+    gizmoAxis = null;
+    gizmoPrevEvent = null;
+  }
+});
+
+// Gizmo hover cursor
+cvWrap.addEventListener('mousemove', e=>{
+  if(!collConfigOpen || gizmoDragging) return;
+  const ax = getGizmoHit(e);
+  cvWrap.style.cursor = ax ? 'crosshair' : (isDrag ? 'grabbing' : 'default');
+  // Hover color
+  if(gizmoGroup){
+    gizmoGroup.traverse(c=>{
+      if(!c.userData.isGizmo) return;
+      const col = c.userData.gizmoAxis===ax ? GIZMO_HOVER[ax] : GIZMO_COLORS[c.userData.gizmoAxis];
+      if(c.material) c.material.color.setHex(col);
+    });
+  }
+});
+
+// ── Click to select proxy ─────────────────────────────────────────
 function renderProxyList(){
   const container = document.getElementById('coll-list');
   container.innerHTML = '';
@@ -2338,6 +2591,7 @@ function renderProxyList(){
       </select>
       <input class="cp-sx" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="Width/Radius" ${proxy.type==='hull'?'disabled':''}>
       <input class="cp-sy" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="Height" ${proxy.type==='hull'?'disabled':''}>
+      <input class="cp-sz" type="number" data-id="${proxy.id}" value="${proxy.sz||proxy.sx}" step="1" min="1" title="Depth (box only)" ${proxy.type!=='box'?'disabled':''}>
       <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0" ${proxy.type==='hull'?'disabled':''}>
       <button class="del-btn" data-id="${proxy.id}">×</button>
     `;
@@ -2366,7 +2620,12 @@ function updateProxy(el){
   const id=parseInt(el.dataset.id);
   const proxy=collProxies.find(p=>p.id===id); if(!proxy) return;
   if(el.classList.contains('cp-part')) proxy.part=el.value;
-  if(el.classList.contains('cp-type')) proxy.type=el.value;
+  if(el.classList.contains('cp-type')){
+    proxy.type=el.value;
+    rebuildProxyWireframes();
+    renderProxyList(); // re-render to update disabled states
+    return;
+  }
   if(el.classList.contains('cp-sx'))  proxy.sx=parseFloat(el.value)||10;
   if(el.classList.contains('cp-sy'))  proxy.sy=parseFloat(el.value)||10;
   if(el.classList.contains('cp-sz'))  proxy.sz=parseFloat(el.value)||10;
@@ -2413,7 +2672,8 @@ document.getElementById('collBtn').addEventListener('click',()=>{
 document.getElementById('collClose').addEventListener('click',()=>{
   collConfigOpen=false;
   clearPartHighlight();
-  setProxyWireframesVisible(shouldShowProxies()); // respect checkbox
+  selectProxy(null);
+  setProxyWireframesVisible(shouldShowProxies());
   document.getElementById('coll-overlay').classList.remove('open');
 });
 // coll-overlay click — no-op (no backdrop to click)
