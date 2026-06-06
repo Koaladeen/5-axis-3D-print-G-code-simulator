@@ -3196,7 +3196,7 @@ function applyJogPosition(){
   if(saved !== undefined) allMoves[0] = saved;
   // Force Three.js to recalculate world matrices before collision check
   scene.updateMatrixWorld(true);
-  checkCollisions();
+  checkCurrentMove(); // includes print hull vs machine check
 }
 
 // Jog-aware versions that take a move directly
