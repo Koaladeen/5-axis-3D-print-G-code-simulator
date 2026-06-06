@@ -1904,12 +1904,12 @@ function checkCurrentMove(){
           setPartColliding(p.part, true);
         }
       }
-      // Restore parts no longer hit by print hull
-      for(const part of Object.keys(partCollidingState)){
-        if(!collidingParts.has(part) && !collViolations.some(k=>k.includes('↔ '+part))){
-          setPartColliding(part, false);
-        }
-      }
+    }
+  }
+  // Always restore parts no longer in any collision (machine-vs-machine or print hull)
+  for(const part of Object.keys(partCollidingState)){
+    if(!collidingParts.has(part) && !collViolations.some(k=>k.includes('↔ '+part))){
+      setPartColliding(part, false);
     }
   }
 
