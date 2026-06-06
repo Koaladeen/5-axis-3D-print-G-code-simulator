@@ -604,6 +604,10 @@
             <input type="checkbox" id="coll-enabled" checked>
             <span style="color:var(--text1);">Check collisions</span>
           </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;" title="Experimental: checks convex hull of printed geometry against machine proxies. May be slow on large files.">
+            <input type="checkbox" id="coll-print-enabled">
+            <span style="color:var(--amber);">&#x2697; Print mesh (exp.)</span>
+          </label>
           <button class="close-btn" id="collClose">×</button>
         </div>
       </div>
@@ -1689,6 +1693,7 @@ function rebuildAll(resetProgress){
     _lastLimStr=''; _lastCollStr='';
     _limitViolations=[]; _collisionViolations=[];
     clearAllPartColliding();
+    clearPrintHull();
     renderViolationPanel();
     document.getElementById('tb-status').textContent='';
     // Home the machine
@@ -1744,6 +1749,73 @@ function getLimits(){
   };
 }
 
+// ── Experimental: print mesh convex hull collision (group 3) ────
+let printHullPts   = null;  // cached world-space hull points for current moveIdx
+let printHullIdx   = -1;    // moveIdx at last hull build
+const PRINT_HULL_THROTTLE = 30; // rebuild hull every N moves
+const PRINT_PART  = 'PrintMesh'; // virtual part name
+
+// Extract world-space vertex sample from visible instanced mesh up to instanceCount
+function sampleInstancedMeshPts(mesh, maxCount, maxSamples){
+  if(!mesh || maxCount <= 0) return [];
+  const pts = [];
+  const mat4 = new THREE.Matrix4();
+  const v    = new THREE.Vector3();
+  const worldMat = mesh.matrixWorld;
+  // Sample up to maxSamples instances evenly
+  const step = Math.max(1, Math.floor(maxCount / maxSamples));
+  const geo  = mesh.geometry;
+  const pos  = geo.attributes.position;
+  // We only need the two endpoints of each cylinder instance (y = ±0.5 in local geo)
+  const localPts = [new THREE.Vector3(0,-0.5,0), new THREE.Vector3(0,0.5,0)];
+  for(let i = 0; i < maxCount; i += step){
+    mesh.getMatrixAt(i, mat4);
+    for(const lp of localPts){
+      v.copy(lp).applyMatrix4(mat4).applyMatrix4(worldMat);
+      pts.push([v.x, v.y, v.z]);
+    }
+  }
+  return pts;
+}
+
+function buildPrintHull(moveIdx){
+  if(!mesh3 && !mesh5) return null;
+  const pts = [];
+  if(mesh3 && cum3[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh3, cum3[moveIdx], 200));
+  if(mesh5 && cum5[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh5, cum5[moveIdx], 200));
+  if(pts.length < 4) return null;
+  // Reduce to hull vertices to keep SAT fast
+  try{
+    const verts = pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]));
+    const hull  = new THREE.ConvexHull();
+    hull.setFromPoints(verts);
+    const seen = new Set(); const hullPts = [];
+    for(const face of hull.faces){
+      let e = face.edge;
+      do {
+        const vv = e.head().point;
+        const key = `${vv.x.toFixed(3)},${vv.y.toFixed(3)},${vv.z.toFixed(3)}`;
+        if(!seen.has(key)){ seen.add(key); hullPts.push([vv.x,vv.y,vv.z]); }
+        e = e.next;
+      } while(e !== face.edge);
+    }
+    return hullPts.length >= 4 ? hullPts : pts;
+  } catch(ex){ return pts; }
+}
+
+function getPrintHullPts(moveIdx){
+  if(Math.abs(moveIdx - printHullIdx) >= PRINT_HULL_THROTTLE || printHullPts === null){
+    printHullPts = buildPrintHull(moveIdx);
+    printHullIdx = moveIdx;
+  }
+  return printHullPts;
+}
+
+function clearPrintHull(){
+  printHullPts = null;
+  printHullIdx = -1;
+}
+
 // ── Per-move check called every playback step ────────────────────
 // Returns true if any violation was found (so caller can pause).
 // Also updates the violation panel in real-time.
@@ -1780,6 +1852,7 @@ function checkCurrentMove(){
       proxiesByPart[p.part].push(p);
     }
     const parts = Object.keys(proxiesByPart);
+    const collidingParts = new Set();
     for(let i=0; i<parts.length; i++){
       for(let j=i+1; j<parts.length; j++){
         if(!shouldCheck(parts[i], parts[j])) continue;
@@ -1792,12 +1865,35 @@ function checkCurrentMove(){
               if(!collViolations.includes(key)) collViolations.push(key);
               setProxyColliding(pa.id, true);
               setProxyColliding(pb.id, true);
+              collidingParts.add(parts[i]);
+              collidingParts.add(parts[j]);
             }
           }
         }
       }
     }
+    // Tint colliding machine parts red; restore cleared ones
+    for(const part of Object.keys(partCollidingState)) setPartColliding(part, collidingParts.has(part));
+    for(const part of collidingParts) setPartColliding(part, true);
     machineGroup.visible = document.getElementById('showMach').checked;
+
+    // ── Print mesh vs machine (group 3, experimental) ───────────────
+    const printEnabled = document.getElementById('coll-print-enabled')?.checked ?? false;
+    if(printEnabled && (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)){
+      partGroups[PRINT_PART] = 3;
+      const hullPts = getPrintHullPts(moveIdx);
+      if(hullPts && hullPts.length >= 4){
+        for(const p of collProxies){
+          if(!shouldCheck(PRINT_PART, p.part)) continue;
+          const wB = getProxyWorldPts(p);
+          if(!wB || !wB.length) continue;
+          if(pointCloudsOverlap(hullPts, wB)){
+            const key = 'PrintMesh ↔ ' + p.part;
+            if(!collViolations.includes(key)) collViolations.push(key);
+          }
+        }
+      }
+    }
   }
 
   const hadViolation = limViolations.length > 0 || collViolations.length > 0;
@@ -2915,6 +3011,10 @@ document.getElementById('coll-overlay').addEventListener('click',e=>{ if(e.targe
 document.getElementById('coll-show-proxies').addEventListener('change',function(){
   setProxyWireframesVisible(this.checked);
 });
+const _collPrintEl = document.getElementById('coll-print-enabled');
+if(_collPrintEl) _collPrintEl.addEventListener('change', function(){
+  clearPrintHull();
+});
 document.getElementById('coll-enabled').addEventListener('change',function(){
   collisionEnabled=this.checked;
 });
@@ -3151,23 +3251,22 @@ document.getElementById('exampleSelect').addEventListener('change', async functi
 // ── Version check & service worker ───────────────────────────────
 (function(){
   const CURRENT_VERSION = document.querySelector('meta[name="app-version"]')?.content || '0.0.0';
-  const banner   = document.getElementById('update-banner');
-  const reloadBtn = document.getElementById('ub-reload-btn');
+  const banner     = document.getElementById('update-banner');
+  const reloadBtn  = document.getElementById('ub-reload-btn');
   const dismissBtn = document.getElementById('ub-dismiss-btn');
 
   // Show banner and wire up buttons
   function showUpdateBanner(){
-    banner.classList.add('visible');
+    if(banner) banner.classList.add('visible');
   }
-  reloadBtn.addEventListener('click', () => {
-    // Skip the SW cache and do a hard reload
+  if(reloadBtn) reloadBtn.addEventListener('click', () => {
     if(navigator.serviceWorker?.controller){
       navigator.serviceWorker.controller.postMessage({type:'SKIP_WAITING'});
     }
     window.location.reload(true);
   });
-  dismissBtn.addEventListener('click', () => {
-    banner.classList.remove('visible');
+  if(dismissBtn) dismissBtn.addEventListener('click', () => {
+    if(banner) banner.classList.remove('visible');
   });
 
   if(!('serviceWorker' in navigator)) return;
