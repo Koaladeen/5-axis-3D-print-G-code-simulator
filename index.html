@@ -630,6 +630,74 @@
     }
   }
 
+
+    /* ── Modals on mobile ── */
+    .modal-overlay { align-items: flex-end; }
+    .modal-box, .modal-box.wide {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      max-height: 88vh;
+      border-radius: 14px 14px 0 0;
+      border-left: none; border-right: none; border-bottom: none;
+      border-top: 3px solid var(--accent);
+    }
+    .modal-head { padding: 10px 14px; }
+    .modal-section { padding: 10px 14px; }
+    .s-input { width: 62px; height: 30px; font-size: 13px; }
+    .s-label { font-size: 13px; }
+    .s-hint { font-size: 11px; }
+
+    /* Settings — axis limits grid: stack label above min/max */
+    #settings-modal .modal-section [style*="grid-template-columns:1fr 80px 80px"] {
+      grid-template-columns: 60px 1fr 1fr !important;
+    }
+    /* Machine geometry grid */
+    #settings-modal .modal-section [style*="grid-template-columns:1fr 52px 80px"] {
+      grid-template-columns: 1fr 44px 72px !important;
+      font-size: 11px;
+    }
+
+    /* Collision modal — header wraps */
+    #coll-modal .modal-head { flex-wrap: wrap; gap: 6px; }
+    #coll-modal .modal-head > div {
+      flex-wrap: wrap; gap: 6px; width: 100%;
+    }
+    #coll-modal .modal-head label { font-size: 12px; }
+
+    /* Collision table: replace multi-column grid with stacked cards */
+    .coll-header-row { display: none; }
+    #coll-list .coll-proxy {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 6px !important;
+      padding: 10px 14px !important;
+      border-bottom: 1px solid var(--border);
+    }
+    #coll-list .coll-proxy > * { width: 100% !important; min-width: 0 !important; }
+    #coll-list .coll-proxy input[type=number],
+    #coll-list .coll-proxy input[type=text],
+    #coll-list .coll-proxy select {
+      width: 100% !important; height: 32px !important; font-size: 13px !important;
+    }
+    /* Size inputs side by side */
+    #coll-list .coll-proxy .coll-nums {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: 5px !important;
+    }
+    #coll-list .coll-proxy .coll-nums input { width: 100% !important; }
+
+    /* Collision footer — wrap buttons */
+    #coll-footer {
+      flex-wrap: wrap !important;
+      gap: 6px !important;
+      padding: 10px 14px !important;
+    }
+    #coll-footer .h-btn { flex: 1 1 calc(50% - 6px) !important; text-align: center !important; padding: 8px 4px !important; font-size: 10px !important; }
+
+    /* Groups bar wraps */
+    #coll-groups-bar { flex-wrap: wrap; gap: 6px; padding: 8px 14px; }
+
   /* Desktop: never show mobile-only elements */
   @media (min-width: 901px) {
     #mob-dock, #mob-backdrop, .mob-drawer { display: none !important; }
@@ -3211,9 +3279,11 @@ function renderProxyList(){
         <option value="sphere" ${proxy.type==='sphere'?'selected':''}>Sphere</option>
         <option value="hull" ${proxy.type==='hull'?'selected':''}>Hull ✓</option>
       </select>
-      <input class="cp-sx" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="Width/Radius" ${proxy.type==='hull'?'disabled':''}>
-      <input class="cp-sy" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="Height" ${proxy.type==='hull'?'disabled':''}>
-      <input class="cp-sz" type="number" data-id="${proxy.id}" value="${proxy.sz||proxy.sx}" step="1" min="1" title="Depth (box only)" ${proxy.type!=='box'?'disabled':''}>
+      <div class="coll-nums">
+        <input class="cp-sx" type="number" data-id="${proxy.id}" value="${proxy.sx}" step="1" min="1" title="W/R" ${proxy.type==='hull'?'disabled':''}>
+        <input class="cp-sy" type="number" data-id="${proxy.id}" value="${proxy.sy}" step="1" min="1" title="H" ${proxy.type==='hull'?'disabled':''}>
+        <input class="cp-sz" type="number" data-id="${proxy.id}" value="${proxy.sz||proxy.sx}" step="1" min="1" title="D (box)" ${proxy.type!=='box'?'disabled':''}>
+      </div>
       <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0" ${proxy.type==='hull'?'disabled':''}>
       <button class="del-btn" data-id="${proxy.id}">×</button>
     `;
