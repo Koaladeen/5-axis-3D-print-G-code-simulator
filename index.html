@@ -1880,7 +1880,6 @@ function checkCurrentMove(){
     // ── Print mesh vs machine (group 3, experimental) ───────────────
     const printEnabled = document.getElementById('coll-print-enabled')?.checked ?? false;
     if(printEnabled && (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)){
-      partGroups[PRINT_PART] = 3;
       const hullPts = getPrintHullPts(moveIdx);
       if(hullPts && hullPts.length >= 4){
         for(const p of collProxies){
@@ -2083,7 +2082,7 @@ let partHighlights = {}; // part name → original materials
 // Group 1 = toolhead side (X, Y)
 // Group 2 = bed side (Z, B, C)
 // Only proxies from DIFFERENT non-zero groups are checked.
-const DEFAULT_GROUPS = {Frame:0, Z:2, B:2, C:2, Y:1, X:1};
+const DEFAULT_GROUPS = {Frame:0, Z:2, B:2, C:2, Y:1, X:1, PrintMesh:3};
 let partGroups = {...DEFAULT_GROUPS};
 
 function shouldCheck(a, b){
@@ -2951,7 +2950,7 @@ document.getElementById('collBtn').addEventListener('click',()=>{
   // Populate groups bar
   const bar=document.getElementById('coll-groups-bar');
   bar.innerHTML='<span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>';
-  MACHINE_PARTS.filter(p=>p!=='Frame').forEach(p=>{
+  [...MACHINE_PARTS.filter(p=>p!=='Frame'), PRINT_PART].forEach(p=>{
     const wrap=document.createElement('div');
     wrap.style.cssText='display:flex;align-items:center;gap:4px;font-size:11px;';
     const lbl=document.createElement('span');
