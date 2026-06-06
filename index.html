@@ -914,7 +914,18 @@ function initStaticSceneLate(){
 const cvWrap = document.getElementById('cv-wrap');
 cvWrap.addEventListener('contextmenu',e=>e.preventDefault());
 cvWrap.addEventListener('mousedown',e=>{
-  if(collConfigOpen && getGizmoHit(e)){ e.stopImmediatePropagation(); return; }
+  if(collConfigOpen){
+    const ax = getGizmoHit(e);
+    if(ax){
+      gizmoDragging=true;
+      gizmoAxis=ax;
+      gizmoPrevEvent={clientX:e.clientX,clientY:e.clientY};
+      const proxy=collProxies.find(p=>p.id===selectedProxyId);
+      if(proxy) gizmoProxyStart={ox:proxy.ox||0,oy:proxy.oy||0,oz:proxy.oz||0};
+      e.preventDefault();
+      return; // don't start orbit
+    }
+  }
   isDrag=true;isRightDrag=e.button===2;lastMX=e.clientX;lastMY=e.clientY;cv.style.cursor='grabbing';
 });
 window.addEventListener('mouseup',()=>{isDrag=false;cv.style.cursor='grab';});
@@ -2468,61 +2479,42 @@ function getProxyHit(e){
   return hits.length>0 ? hits[0].object.userData._proxyId : null;
 }
 
-// Project world point onto screen axis for drag delta
+// Project mouse delta onto a world axis, return world-space movement amount
 function screenToAxisDelta(e, prevE, axisKey){
-  // Get the axis direction in world space (from the part group)
   if(!gizmoGroup) return 0;
-  const axes = { x: new THREE.Vector3(1,0,0), y: new THREE.Vector3(0,1,0), z: new THREE.Vector3(0,0,1) };
+  const axes = {x:new THREE.Vector3(1,0,0), y:new THREE.Vector3(0,1,0), z:new THREE.Vector3(0,0,1)};
+  // Transform axis from part-group local space to world space
   const axisWorld = axes[axisKey].clone().transformDirection(gizmoGroup.parent.matrixWorld).normalize();
 
-  // Project axis onto screen
   const rect = cvWrap.getBoundingClientRect();
   const W = rect.width, H = rect.height;
 
-  // Get gizmo center in screen space
-  const center = new THREE.Vector3();
-  gizmoGroup.getWorldPosition(center);
-  const c2 = center.clone().project(camera);
-  const cx = (c2.x+1)/2*W, cy = (-c2.y+1)/2*H;
+  // Project two world points onto screen to get the screen-space axis direction
+  const gizmoWorldPos = new THREE.Vector3();
+  gizmoGroup.getWorldPosition(gizmoWorldPos);
 
-  // Get axis tip in screen space
-  const tip = center.clone().add(axisWorld.clone().multiplyScalar(50));
-  const t2 = tip.clone().project(camera);
-  const tx = (t2.x+1)/2*W, ty = (-t2.y+1)/2*H;
+  const p1 = gizmoWorldPos.clone().project(camera);
+  const p2 = gizmoWorldPos.clone().add(axisWorld.clone().multiplyScalar(10)).project(camera);
 
-  // Screen axis direction
-  const sax = tx-cx, say = ty-cy;
-  const slen = Math.sqrt(sax*sax+say*say);
-  if(slen<1) return 0;
+  const sx = (p2.x - p1.x) * W * 0.5;
+  const sy = (p2.y - p1.y) * H * 0.5; // note: screen Y is inverted
+  const sLen = Math.sqrt(sx*sx + sy*sy);
+  if(sLen < 0.5) return 0;
 
-  // Mouse delta
+  // Mouse movement in screen pixels
   const dx = e.clientX - prevE.clientX;
-  const dy = e.clientY - prevE.clientY;
+  const dy = -(e.clientY - prevE.clientY); // invert Y for screen coords
 
   // Project mouse delta onto screen axis
-  const screenDelta = (dx*sax + dy*say) / slen;
+  const screenDot = (dx*sx + dy*sy) / sLen;
 
-  // Convert screen pixels to world units (approximate)
-  const worldScale = 1.5 * (camera.position.z * zoom) / Math.min(W, H);
-  return screenDelta * worldScale;
+  // Convert screen pixels to world units
+  // At gizmo's depth, 10 world units = sLen pixels
+  return screenDot * (10 / sLen);
 }
 
-// ── Gizmo mouse events ────────────────────────────────────────────
+// ── Click to select proxy ─────────────────────────────────────────
 let gizmoPrevEvent = null;
-
-cvWrap.addEventListener('mousedown', e=>{
-  if(!collConfigOpen) return;
-  const ax = getGizmoHit(e);
-  if(ax){
-    gizmoDragging = true;
-    gizmoAxis = ax;
-    gizmoPrevEvent = {clientX:e.clientX, clientY:e.clientY};
-    const proxy = collProxies.find(p=>p.id===selectedProxyId);
-    if(proxy) gizmoProxyStart = {ox:proxy.ox||0, oy:proxy.oy||0, oz:proxy.oz||0};
-    e.stopPropagation(); // don't start orbit
-    return;
-  }
-});
 
 window.addEventListener('mousemove', e=>{
   if(!gizmoDragging || !gizmoAxis || selectedProxyId===null) return;
@@ -2596,6 +2588,11 @@ function renderProxyList(){
       <button class="del-btn" data-id="${proxy.id}">×</button>
     `;
     container.appendChild(row);
+    // Click row to select proxy and show gizmo
+    row.addEventListener('mousedown', e=>{
+      if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.classList.contains('del-btn')) return;
+      selectProxy(proxy.id);
+    });
   }
   // Wire events
   container.querySelectorAll('.cp-part,.cp-type,.cp-sx,.cp-sy,.cp-sz,.cp-off').forEach(el=>{
