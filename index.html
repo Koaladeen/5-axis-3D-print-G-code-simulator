@@ -1688,6 +1688,7 @@ function rebuildAll(resetProgress){
     // Clear live violation state for the new file
     _lastLimStr=''; _lastCollStr='';
     _limitViolations=[]; _collisionViolations=[];
+    clearAllPartColliding();
     renderViolationPanel();
     document.getElementById('tb-status').textContent='';
     // Home the machine
@@ -2670,38 +2671,61 @@ function getProxyHit(e){
   return hits.length>0 ? hits[0].object.userData._proxyId : null;
 }
 
-// Project mouse delta onto a world axis, return world-space movement amount
+// Project mouse delta onto a local axis, return LOCAL-space movement amount.
+// proxy.ox/oy/oz live in part-group local space, so we work there end-to-end.
 function screenToAxisDelta(e, prevE, axisKey){
-  if(!gizmoGroup) return 0;
-  const axes = {x:new THREE.Vector3(1,0,0), y:new THREE.Vector3(0,1,0), z:new THREE.Vector3(0,0,1)};
-  // Transform axis from part-group local space to world space
-  const axisWorld = axes[axisKey].clone().transformDirection(gizmoGroup.parent.matrixWorld).normalize();
+  if(!gizmoGroup || !gizmoGroup.parent) return 0;
+
+  // The axis in part-group local space (always aligned with local axes)
+  const axisLocal = {
+    x: new THREE.Vector3(1,0,0),
+    y: new THREE.Vector3(0,1,0),
+    z: new THREE.Vector3(0,0,1),
+  }[axisKey];
+
+  // Transform local axis → world for screen projection
+  const axisWorld = axisLocal.clone().transformDirection(gizmoGroup.parent.matrixWorld).normalize();
 
   const rect = cvWrap.getBoundingClientRect();
   const W = rect.width, H = rect.height;
 
-  // Project two world points onto screen to get the screen-space axis direction
+  // Get gizmo world position and project two points to screen
   const gizmoWorldPos = new THREE.Vector3();
   gizmoGroup.getWorldPosition(gizmoWorldPos);
-
   const p1 = gizmoWorldPos.clone().project(camera);
-  const p2 = gizmoWorldPos.clone().add(axisWorld.clone().multiplyScalar(10)).project(camera);
+  const p2 = gizmoWorldPos.clone().addScaledVector(axisWorld, 10).project(camera);
 
+  // Screen-space axis direction (pixels)
   const sx = (p2.x - p1.x) * W * 0.5;
-  const sy = (p2.y - p1.y) * H * 0.5; // note: screen Y is inverted
+  const sy = (p2.y - p1.y) * H * 0.5; // NDC Y flipped vs screen Y, cancel below
   const sLen = Math.sqrt(sx*sx + sy*sy);
   if(sLen < 0.5) return 0;
 
-  // Mouse movement in screen pixels
-  const dx = e.clientX - prevE.clientX;
-  const dy = -(e.clientY - prevE.clientY); // invert Y for screen coords
+  // Mouse delta in pixels (screen Y inverted vs NDC Y)
+  const dx =   e.clientX - prevE.clientX;
+  const dy = -(e.clientY - prevE.clientY);
 
-  // Project mouse delta onto screen axis
+  // How far along the screen axis did the mouse move?
   const screenDot = (dx*sx + dy*sy) / sLen;
 
-  // Convert screen pixels to world units
-  // At gizmo's depth, 10 world units = sLen pixels
-  return screenDot * (10 / sLen);
+  // screen pixels → world units: 10 world units projected to sLen pixels
+  const worldDelta = screenDot * (10 / sLen);
+
+  // World units → local units: account for the part group's world scale.
+  // Extract the X-axis world-scale from the parent's matrixWorld column length.
+  const parentMat = gizmoGroup.parent.matrixWorld;
+  const parentScaleAlongAxis = new THREE.Vector3(
+    parentMat.elements[0], parentMat.elements[1], parentMat.elements[2]
+  ).length(); // scale of X column; for uniform scale this works for all axes
+  // More precisely: use the scale along the specific axis column
+  const col = axisKey === 'x' ? 0 : axisKey === 'y' ? 4 : 8; // column offsets
+  const axisColLen = new THREE.Vector3(
+    parentMat.elements[col],
+    parentMat.elements[col+1],
+    parentMat.elements[col+2]
+  ).length();
+
+  return axisColLen > 0.0001 ? worldDelta / axisColLen : worldDelta;
 }
 
 // ── Click to select proxy ─────────────────────────────────────────
