@@ -1761,7 +1761,7 @@ function sampleInstancedMeshPts(mesh, maxCount, maxSamples){
   const pts = [];
   const mat4 = new THREE.Matrix4();
   const v    = new THREE.Vector3();
-  const worldMat = mesh.matrixWorld;
+  const worldMat = mesh.matrixWorld.clone();
   // Sample up to maxSamples instances evenly
   const step = Math.max(1, Math.floor(maxCount / maxSamples));
   const geo  = mesh.geometry;
@@ -1780,6 +1780,7 @@ function sampleInstancedMeshPts(mesh, maxCount, maxSamples){
 
 function buildPrintHull(moveIdx){
   if(!mesh3 && !mesh5) return null;
+  scene.updateMatrixWorld(true);
   const pts = [];
   if(mesh3 && cum3[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh3, cum3[moveIdx], 200));
   if(mesh5 && cum5[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh5, cum5[moveIdx], 200));
