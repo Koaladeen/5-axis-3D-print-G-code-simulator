@@ -2188,10 +2188,10 @@ function setProxyWireframesVisible(v){
 function getProxyWorldPts(proxy){
   const grp=mGrp[proxy.part]; if(!grp) return null;
   const v=new THREE.Vector3();
+  const mat=grp.matrixWorld; // needed by ALL branches, not just hull
 
   if(proxy.type==='hull'&&proxy.hullPoints){
     // Points are in part-group local space — apply group's world matrix for current kinematics
-    const mat=grp.matrixWorld;
     return proxy.hullPoints.map(p=>{ v.set(p[0],p[1],p[2]).applyMatrix4(mat); return [v.x,v.y,v.z]; });
   }
   const cx=proxy.ox||0,cy=proxy.oy||0,cz=proxy.oz||0;
