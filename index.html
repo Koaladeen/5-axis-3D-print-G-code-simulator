@@ -1851,7 +1851,9 @@ function checkCurrentMove(){
   const collidingParts = new Set();
   if(collisionEnabled && collProxies.length && machineLoaded){
     machineGroup.visible = true;
-    scene.updateMatrixWorld(true);
+    rootGroup.rotation.x = rotX; rootGroup.rotation.y = rotY;
+    rootGroup.position.x = panX; rootGroup.position.y = panY;
+    rootGroup.updateWorldMatrix(true, true);
     const proxiesByPart = {};
     for(const p of collProxies){
       if(!proxiesByPart[p.part]) proxiesByPart[p.part] = [];
@@ -1885,7 +1887,10 @@ function checkCurrentMove(){
   // ── Print mesh vs machine (experimental) — runs independently ───
   const printEnabled = document.getElementById('coll-print-enabled')?.checked ?? false;
   if(collisionEnabled && printEnabled && collProxies.length && (cum3[moveIdx] > 0 || cum5[moveIdx] > 0)){
-    scene.updateMatrixWorld(true);
+    // Must sync rootGroup's orbit transform into matrixWorld before reading any world positions
+    rootGroup.rotation.x = rotX; rootGroup.rotation.y = rotY;
+    rootGroup.position.x = panX; rootGroup.position.y = panY;
+    rootGroup.updateWorldMatrix(true, true);
     const hullPts = getPrintHullPts(moveIdx);
     if(hullPts && hullPts.length >= 4){
       for(const p of collProxies){
