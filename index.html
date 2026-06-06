@@ -2140,10 +2140,19 @@ function sampleInstancedMeshPts(mesh, maxCount, maxSamples){
 
 function buildPrintHull(moveIdx){
   if(!mesh3 && !mesh5) return null;
+  // Sample with bedGroup at identity so hull is in neutral scene-space.
+  // We save/restore bedGroup's transform around the sample.
+  const savedQ = bedGroup.quaternion.clone();
+  const savedP = bedGroup.position.clone();
+  bedGroup.quaternion.set(0, 0, 0, 1);
+  bedGroup.position.set(0, 0, 0);
   scene.updateMatrixWorld(true);
   const pts = [];
   if(mesh3 && cum3[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh3, cum3[moveIdx], 200));
   if(mesh5 && cum5[moveIdx] > 0) pts.push(...sampleInstancedMeshPts(mesh5, cum5[moveIdx], 200));
+  bedGroup.quaternion.copy(savedQ);
+  bedGroup.position.copy(savedP);
+  scene.updateMatrixWorld(true);
   if(pts.length < 4) return null;
   // Reduce to hull vertices to keep SAT fast
   try{
@@ -2165,8 +2174,10 @@ function buildPrintHull(moveIdx){
 }
 
 function getPrintHullPts(moveIdx){
-  // Always rebuild when not playing (scrubbing/jogging) so manual proxy tweaks are reflected instantly.
-  // During playback, throttle to every N moves to keep perf manageable.
+  // While jogging, bedGroup is at jog pose — never rebuild, use the hull
+  // cached at pause time (which was built with bedGroup at identity).
+  if(isJogging) return printHullPts;
+  // During playback, throttle rebuilds. When scrubbing (paused, not jogging), rebuild freely.
   const stale = printHullPts === null || Math.abs(moveIdx - printHullIdx) >= (isPlaying ? PRINT_HULL_THROTTLE : 1);
   if(stale){
     printHullPts = buildPrintHull(moveIdx);
@@ -2404,6 +2415,15 @@ function stopPlayback(){
   clearInterval(playInterval);
   playInterval=null;
   setPlaying(false);
+  // Pre-warm print hull cache now, while bedGroup is still in its print pose.
+  // This ensures isJogging checks have a valid hull even if jog starts immediately.
+  if(mesh3 || mesh5){
+    const prog = document.getElementById('prog');
+    const moveIdx = Math.max(0, Math.floor(allMoves.length * parseInt(prog.value) / 10000) - 1);
+    const pmIdx = (cum3[moveIdx] > 0 || cum5[moveIdx] > 0) ? moveIdx : Math.max(0, allMoves.length - 1);
+    printHullPts = buildPrintHull(pmIdx);
+    printHullIdx = pmIdx;
+  }
 }
 
 function startPlayback(){
@@ -3536,6 +3556,7 @@ const JOG_AXES = [
 const HOME_POS = {x:0, y:0, z:80, b:0, c:0};
 let jogPos = {...HOME_POS};
 let jogActive = false; // true when in jog mode (playback paused)
+let isJogging = false;  // true while applyJogPosition is running
 
 function buildJogPanel(){
   const container = document.getElementById('jog-axes');
@@ -3593,7 +3614,9 @@ function applyJogPosition(){
   // reads the correct moveIdx (prog bar position) against the actual
   // printed geometry, while the machine is posed at the jog position.
   scene.updateMatrixWorld(true);
+  isJogging = true;
   checkCurrentMove(); // includes print hull vs machine check
+  isJogging = false;
   if(saved !== undefined) allMoves[0] = saved;
 }
 
