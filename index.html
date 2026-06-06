@@ -587,6 +587,7 @@
     <div class="tb-group" style="border-left:1px solid var(--border);border-right:none;">
       <button class="tb-btn" id="settingsBtn">⚙ SETTINGS</button>
       <button class="tb-btn danger" id="collBtn">⬡ COLLISION</button>
+      <button class="tb-btn" id="fsBtn" title="Toggle fullscreen">⛶</button>
     </div>
   </div>
 
@@ -3127,6 +3128,34 @@ fetchMachineList();
 if(screen.orientation && screen.orientation.lock){
   screen.orientation.lock('landscape').catch(()=>{});
 }
+
+// ── Fullscreen toggle ─────────────────────────────────────────────
+(function(){
+  const btn = document.getElementById('fsBtn');
+  if(!btn) return;
+
+  function isFS(){
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function updateBtn(){
+    btn.textContent = isFS() ? '⛶' : '⛶';
+    btn.title = isFS() ? 'Exit fullscreen' : 'Enter fullscreen';
+    btn.classList.toggle('active', isFS());
+  }
+
+  btn.addEventListener('click', ()=>{
+    const el = document.documentElement;
+    if(!isFS()){
+      (el.requestFullscreen || el.webkitRequestFullscreen || (()=>{})).call(el).catch(()=>{});
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || (()=>{})).call(document).catch(()=>{});
+    }
+  });
+
+  document.addEventListener('fullscreenchange', updateBtn);
+  document.addEventListener('webkitfullscreenchange', updateBtn);
+  updateBtn();
+})();
 
 // ── Axis jog panel ────────────────────────────────────────────────
 const JOG_AXES = [
