@@ -393,9 +393,8 @@
   #coll-overlay {
     position: fixed;
     top: 36px; left: 196px; bottom: 0;
-    width: 380px;
-    overflow-x: hidden;
-    overflow-y: hidden;
+    width: min(340px, calc(100vw - 200px));
+    overflow: hidden;
     background: var(--ui-bg0);
     border-right: 2px solid var(--accent);
     box-shadow: 4px 0 20px rgba(0,0,0,0.2);
@@ -725,7 +724,7 @@
     #coll-overlay {
       top: 40px !important;
       left: 0 !important;
-      width: min(300px, 80vw) !important;
+      width: min(280px, 90vw) !important;
       border-right: 2px solid var(--accent) !important;
       box-shadow: 4px 0 20px rgba(0,0,0,0.3) !important;
     }
@@ -806,23 +805,27 @@
   <!-- Collision configurator modal -->
   <div id="coll-overlay">
     <div id="coll-modal" class="modal-box wide">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--ui-bg1);border-bottom:1px solid var(--border);flex-shrink:0;box-sizing:border-box;width:100%;">
-        <span style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--text0);">COLLISION PROXIES</span>
-        <button id="collClose" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:22px;line-height:1;padding:0 6px;flex-shrink:0;margin-right:2px;">×</button>
-      </div>
-      <div style="padding:6px 10px;background:var(--ui-bg1);border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex-shrink:0;">
-        <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;">
-          <input type="checkbox" id="coll-show-proxies">
-          <span style="color:var(--text1);">Show proxies</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;">
-          <input type="checkbox" id="coll-enabled" checked>
-          <span style="color:var(--text1);">Check collisions</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;" title="Experimental: checks convex hull of printed geometry against machine proxies. May be slow on large files.">
-          <input type="checkbox" id="coll-print-enabled">
-          <span style="color:var(--amber);">&#x2697; Print mesh (exp.)</span>
-        </label>
+      <div style="background:var(--ui-bg1);border-bottom:2px solid var(--accent);flex-shrink:0;">
+        <!-- Title row with close button -->
+        <div style="display:flex;align-items:center;padding:7px 8px 7px 10px;gap:8px;">
+          <span style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--text0);flex:1;min-width:0;">COLLISION PROXIES</span>
+          <button id="collClose" style="background:var(--ui-bg2);border:1px solid var(--border);color:var(--text1);cursor:pointer;font-size:16px;line-height:1;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:2px;">×</button>
+        </div>
+        <!-- Checkboxes row -->
+        <div style="padding:0 10px 7px;display:flex;flex-direction:column;gap:5px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="coll-show-proxies">
+            <span style="color:var(--text1);">Show proxies</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="coll-enabled" checked>
+            <span style="color:var(--text1);">Check collisions</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;" title="Experimental">
+            <input type="checkbox" id="coll-print-enabled">
+            <span style="color:var(--amber);">⚗ Print mesh (exp.)</span>
+          </label>
+        </div>
       </div>
       <div style="padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--cyan);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="coll-selected-part">Click a machine part to select it</div>
       <div id="coll-groups-bar" style="padding:5px 8px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:3px 6px;align-items:center;flex-wrap:wrap;font-size:9px;overflow:hidden;">
