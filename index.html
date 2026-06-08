@@ -721,6 +721,7 @@
     #coll-groups-bar { flex-wrap: wrap; gap: 6px; padding: 8px 14px; }
 
     /* ── Collision panel on mobile: left drawer, narrower ── */
+    #coll-modal { width: 100% !important; max-width: 100% !important; }
     #coll-overlay {
       top: 40px !important;
       left: 0 !important;
@@ -804,7 +805,7 @@
 
   <!-- Collision configurator modal -->
   <div id="coll-overlay">
-    <div id="coll-modal">
+    <div id="coll-modal" class="modal-box wide">
       <div style="background:var(--ui-bg1);border-bottom:2px solid var(--accent);flex-shrink:0;">
         <!-- Title row with close button -->
         <div style="display:flex;align-items:center;padding:7px 8px 7px 10px;gap:8px;">
