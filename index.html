@@ -1731,25 +1731,32 @@ function buildKinematicTree(){
 
 // Apply the current move to all kinematic groups
 function applyKinematicsToGroups(m){
-  const THREE_AXES = {
-    'X': new THREE.Vector3(1,0,0),
-    'Y': new THREE.Vector3(0,1,0),
-    'Z': new THREE.Vector3(0,0,1),
-  };
   for(const p of machineKinematics.parts){
     const grp = mGrp[p.name]; if(!grp || p.type==='static') continue;
     const raw = m[p.gcode] || 0;
     const val = p.invert ? -raw : raw;
-    const ax  = new THREE.Vector3(p.threeAxis[0], p.threeAxis[1], p.threeAxis[2]);
+    const [ax, ay, az] = p.threeAxis;
+
     if(p.type === 'linear'){
-      grp.position.set(
-        ax.x * val,
-        ax.y * val,
-        ax.z * val
-      );
+      grp.position.set(ax * val, ay * val, az * val);
+
     } else if(p.type === 'rotary'){
-      grp.rotation.set(0,0,0);
-      grp.rotateOnAxis(ax, val * Math.PI / 180);
+      // Reset rotation first, then apply.
+      // Use Euler directly so we stay in local space regardless of parent transforms.
+      // Map the threeAxis vector to the closest principal axis for clean Euler assignment.
+      // For non-principal axes we use quaternion setFromAxisAngle which is always local.
+      grp.rotation.set(0, 0, 0);
+      const rad = val * Math.PI / 180;
+      if(ax===1  && ay===0 && az===0)  grp.rotateX( rad);
+      else if(ax===-1 && ay===0 && az===0) grp.rotateX(-rad);
+      else if(ax===0  && ay===1 && az===0) grp.rotateY( rad);
+      else if(ax===0  && ay===-1&& az===0) grp.rotateY(-rad);
+      else if(ax===0  && ay===0 && az===1) grp.rotateZ( rad);
+      else if(ax===0  && ay===0 && az===-1)grp.rotateZ(-rad);
+      else {
+        // Arbitrary axis — rotateOnAxis works in local space
+        grp.rotateOnAxis(new THREE.Vector3(ax, ay, az).normalize(), rad);
+      }
     }
   }
 }
