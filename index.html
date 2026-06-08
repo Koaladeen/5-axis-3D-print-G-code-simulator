@@ -393,8 +393,9 @@
   #coll-overlay {
     position: fixed;
     top: 36px; left: 196px; bottom: 0;
-    width: 360px;
-    overflow: hidden;
+    width: 380px;
+    overflow-x: hidden;
+    overflow-y: hidden;
     background: var(--ui-bg0);
     border-right: 2px solid var(--accent);
     box-shadow: 4px 0 20px rgba(0,0,0,0.2);
@@ -412,7 +413,7 @@
     position: static;
     width: 100%; max-width: 100%; max-height: none;
     border: none; box-shadow: none; border-top: none;
-    overflow: hidden;
+    overflow: visible; /* children handle their own overflow */
   }
   #coll-modal .modal-head { cursor: default; flex-wrap: wrap; gap: 4px; padding: 8px 10px; }
   #coll-modal .modal-head .title { font-size: 10px; }
@@ -486,21 +487,26 @@
     color: var(--text0); font-family: var(--mono); font-size: 10px;
     padding: 2px 3px; border-radius: 0; box-sizing: border-box;
   }
-  .cp-part  { flex: 1; min-width: 0; max-width: 120px; font-size: 10px; }
-  .cp-group { font-family: var(--mono); font-size: 9px; color: var(--cyan); white-space: nowrap; padding: 0 3px; flex-shrink: 0; }
-  .cp-type  { width: 58px; flex-shrink: 0; font-size: 10px; }
-  .cp-num   { width: 36px; flex-shrink: 0; text-align: right; min-width: 0; }
-  .cp-off   { flex: 1; min-width: 0; font-size: 9px; max-width: 90px; }
+  /* proxy row1: part selector fills, then type, then delete */
+  .cp-part  { flex: 1; min-width: 0; font-size: 10px; overflow: hidden; }
+  .cp-group { font-family: var(--mono); font-size: 9px; color: var(--cyan); white-space: nowrap; padding: 0 2px; flex-shrink: 0; }
+  .cp-type  { width: 54px; flex-shrink: 0; font-size: 10px; }
+  /* proxy row2: labels + 3 small number inputs + offset fills */
+  .cp-num   { width: 38px; flex-shrink: 0; text-align: right; }
+  .cp-off   { flex: 1; min-width: 0; font-size: 9px; }
   .coll-proxy .del-btn {
     background: none; border: none; color: var(--text2);
-    cursor: pointer; font-size: 14px; padding: 0 2px; flex-shrink: 0;
-    line-height: 1;
+    cursor: pointer; font-size: 14px; padding: 0 2px; flex-shrink: 0; line-height: 1;
   }
   .coll-proxy .del-btn:hover { color: var(--red); }
   .coll-size-label { font-family: var(--mono); font-size: 9px; color: var(--text2); white-space: nowrap; flex-shrink: 0; }
-  #coll-groups-bar select { font-size: 9px !important; padding: 1px 2px !important; max-width: 44px; }
+  /* Groups bar: wrap tightly, small selects */
+  #coll-groups-bar { overflow: hidden; }
+  #coll-groups-bar select { font-size: 9px !important; padding: 1px 2px !important; width: 38px !important; }
   #coll-groups-bar span { font-size: 9px !important; }
-  #coll-footer { padding: 7px 8px; border-top: 1px solid var(--border); display: flex; gap: 5px; flex-wrap: wrap; background: var(--ui-bg1); }
+  /* Footer buttons wrap into 2 columns */
+  #coll-footer { padding: 6px 8px; border-top: 1px solid var(--border); display: flex; gap: 4px; flex-wrap: wrap; background: var(--ui-bg1); }
+  #coll-footer .h-btn { flex: 1 1 calc(50% - 4px); font-size: 9px; padding: 5px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .coll-header-row { display: none; }
   #coll-status { font-size: 10px; font-family: var(--mono); padding: 6px 12px; color: var(--text2); border-top: 1px solid var(--border-lt); min-height: 24px; background: var(--ui-bg1); }
 
@@ -800,9 +806,9 @@
   <!-- Collision configurator modal -->
   <div id="coll-overlay">
     <div id="coll-modal" class="modal-box wide">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--ui-bg1);border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--ui-bg1);border-bottom:1px solid var(--border);flex-shrink:0;box-sizing:border-box;width:100%;">
         <span style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--text0);">COLLISION PROXIES</span>
-        <button id="collClose" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:22px;line-height:1;padding:0 2px;">×</button>
+        <button id="collClose" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:22px;line-height:1;padding:0 6px;flex-shrink:0;margin-right:2px;">×</button>
       </div>
       <div style="padding:6px 10px;background:var(--ui-bg1);border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex-shrink:0;">
         <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;">
@@ -818,7 +824,7 @@
           <span style="color:var(--amber);">&#x2697; Print mesh (exp.)</span>
         </label>
       </div>
-      <div style="padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--cyan);line-height:1.4;" id="coll-selected-part">Click a machine part in the 3D view to select it for proxy assignment</div>
+      <div style="padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--cyan);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="coll-selected-part">Click a machine part to select it</div>
       <div id="coll-groups-bar" style="padding:5px 8px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:3px 6px;align-items:center;flex-wrap:wrap;font-size:9px;overflow:hidden;">
         <span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>
       </div>
@@ -3475,7 +3481,7 @@ document.getElementById('collBtn').addEventListener('click',()=>{
     wrap.style.cssText='display:flex;align-items:center;gap:4px;font-size:11px;';
     const lbl=document.createElement('span');
     lbl.style.cssText='color:var(--text1);font-family:var(--mono);';
-    lbl.textContent=p;
+    lbl.textContent=p==='PrintMesh'?'PM':p;
     const sel=document.createElement('select');
     sel.id='grp-'+p;
     sel.style.cssText='background:var(--bg3);border:1px solid var(--border-hi);color:var(--text0);font-family:var(--mono);font-size:10px;padding:2px 4px;border-radius:3px;';
