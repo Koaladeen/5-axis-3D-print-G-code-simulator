@@ -975,6 +975,7 @@
         <button class="s-apply" id="s-apply-btn" style="flex:1;min-width:120px;">Apply changes</button>
         <button class="h-btn" id="s-export-btn" style="flex:1;min-width:120px;padding:7px 10px;font-size:10px;">↓ Export machine.json</button>
         <button class="h-btn" id="s-import-btn" style="flex:1;min-width:120px;padding:7px 10px;font-size:10px;">↑ Import machine.json</button>
+        <button class="h-btn" id="kinematicsBtn" style="flex:1;min-width:120px;padding:7px 10px;font-size:10px;">⚙ Machine Builder…</button>
         <input type="file" id="s-import-file" accept=".json" style="display:none">
       </div>
 
@@ -1159,6 +1160,51 @@
     </div>
   </div>
 </div>
+
+  <!-- Machine Builder modal -->
+  <div id="kb-overlay" class="modal-overlay">
+    <div id="kb-modal" class="modal-box wide" style="max-height:90vh;overflow-y:auto;">
+      <div class="modal-head">
+        <span class="title">MACHINE BUILDER</span>
+        <button class="close-btn" id="kbClose">×</button>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Kinematic Parts</div>
+        <p class="s-hint">Each row is one STL part. Define parent, type, which G-code axis drives it, and how it moves in 3D space.</p>
+        <div id="kb-parts-list" style="margin-top:8px;"></div>
+        <button class="h-btn" id="kb-add-part" style="margin-top:8px;width:100%;">+ Add part</button>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Bed &amp; Tool Assignment</div>
+        <div class="s-row">
+          <span class="s-label">Bed part</span>
+          <select class="s-input" id="kb-bed-part" style="width:100px;text-align:left;">
+          </select>
+        </div>
+        <p class="s-hint">The part that physically carries the buildplate. bedGroup will sync its orientation to this part.</p>
+        <div class="s-row">
+          <span class="s-label">Tool part</span>
+          <select class="s-input" id="kb-tool-part" style="width:100px;text-align:left;">
+          </select>
+        </div>
+        <p class="s-hint">The part that carries the nozzle.</p>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Bed Rotation Axes</div>
+        <p class="s-hint">Which G-code axes contribute to the part-frame coordinate transform (toPart). Add one entry per rotary axis that tilts the bed.</p>
+        <div id="kb-rot-axes-list" style="margin-top:8px;"></div>
+        <button class="h-btn" id="kb-add-rot-axis" style="margin-top:8px;width:100%;">+ Add rotation axis</button>
+      </div>
+
+      <div class="modal-section" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="s-apply" id="kb-apply-btn" style="flex:1;min-width:120px;">Apply &amp; Reload Machine</button>
+        <button class="h-btn" id="kb-reset-btn" style="flex:1;min-width:120px;">Reset to Default</button>
+      </div>
+    </div>
+  </div>
 
 <!-- ── Mobile drawers + dock (hidden on desktop via CSS) ── -->
 <div id="mob-backdrop"></div>
@@ -1533,24 +1579,28 @@ function buildNozzle(){
 }
 
 // Canonical bed quaternion for machine frame (bed tilts away from nozzle)
-function calcBedQuat(bRad, cRad){
-  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1),  bRad);
-  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0), cRad);
-  return new THREE.Quaternion().copy(qB).multiply(qC);
+// Build bed quaternion from active kinematics bedRotAxes
+function calcBedQuat(move){
+  let q = new THREE.Quaternion();
+  for(const ax of machineKinematics.bedRotAxes){
+    const val = (move[ax.gcode] || 0) * Math.PI / 180 * (ax.invert ? -1 : 1);
+    const axVec = new THREE.Vector3(ax.axis[0], ax.axis[1], ax.axis[2]);
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(axVec, val));
+  }
+  return q;
 }
 
-// Part frame nozzle: same as calcBedQuat but C flipped
-function calcNozzlePartQuat(bRad, cRad){
-  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1), -bRad);
-  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0),  cRad);
-  return new THREE.Quaternion().copy(qB).multiply(qC);
+// Nozzle orientation in part frame = same rotation as bed
+function calcNozzlePartQuat(move){
+  return calcBedQuat(move);
 }
 
-// Nozzle quaternion for part frame (inverse of toPart rotation)
-function calcNozzleQuat(bRad, cRad){
-  const qB = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,-1), -bRad);
-  const qC = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1, 0),  cRad); // +cRad matches toPart's -c
-  return new THREE.Quaternion().copy(qB).multiply(qC).conjugate();
+// Legacy two-arg wrappers kept for any call sites that pass bRad,cRad directly
+function calcBedQuatLegacy(bRad, cRad){
+  return calcBedQuat({mb: bRad*180/Math.PI, mc: cRad*180/Math.PI});
+}
+function calcNozzlePartQuatLegacy(bRad, cRad){
+  return calcNozzlePartQuat({mb: bRad*180/Math.PI, mc: cRad*180/Math.PI});
 }
 
 // Apply B/C rotation and Z translation to bedGroup in machine frame
@@ -1562,7 +1612,7 @@ function updateBedRotation(moveIdx){
     return;
   }
   const m = allMoves[Math.min(moveIdx-1, allMoves.length-1)];
-  bedGroup.quaternion.copy(calcBedQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
+  bedGroup.quaternion.copy(calcBedQuat(m));
   bedGroup.position.set(0, -m.mz, 0); // Z moves bed down, same as machine model
 }
 
@@ -1580,7 +1630,7 @@ function updateNozzlePosition(moveIdx){
   if(usePart){
     const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
     nozzleMesh.position.set(wx,wz,-wy);
-    nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180, m.mc*Math.PI/180));
+    nozzleMesh.quaternion.copy(calcNozzlePartQuat(m));
   } else {
     nozzleMesh.position.set(m.mx, 0, -m.my);
     nozzleMesh.quaternion.set(0,0,0,1);
@@ -1604,7 +1654,48 @@ const MACHINES_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-prin
 // Kinematic tree: Frame, Z↕, Z→B (rotates on Z), B→C (rotates on B-local Y)
 //                 Y (translates Z), Y→X (translates X, carries nozzle)
 // ═══════════════════════════════════════════════════════════════════════════
-const MACHINE_PARTS = ['Frame','Z','B','C','Y','X'];
+// ── Kinematics configuration ─────────────────────────────────────────────
+// This is the single source of truth for machine kinematics.
+// Each entry describes one STL part: its parent in the tree, how it moves,
+// which G-code axis drives it, and the Three.js axis it moves/rotates on.
+//
+// type:    'static'  — never moves (Frame)
+//          'linear'  — translates along threeAxis by gcode value
+//          'rotary'  — rotates around threeAxis by gcode value (degrees)
+// parent:  name of parent part, or null for root-level parts
+// gcode:   which parsed move field drives it: 'mx','my','mz','mb','mc'
+// threeAxis: [x,y,z] unit vector of the translation/rotation axis in Three.js space
+// invert:  multiply the value by -1 before applying
+// bedSide: true = this part (and its children) follow the bed; false = toolhead side
+//
+// bedPart:  name of the part that physically IS the bed (bedGroup syncs to it)
+// toolPart: name of the part that carries the nozzle
+// bedRotAxes: which axes contribute to the toPart() coordinate transform
+//   Each entry: { gcode: field on move, axis: [x,y,z] in part-frame, invert: bool }
+
+const DEFAULT_KINEMATICS = {
+  parts: [
+    { name:'Frame', parent:null,    type:'static',  gcode:null,  threeAxis:[0,1,0], invert:false, bedSide:true  },
+    { name:'Z',     parent:'Frame', type:'linear',  gcode:'mz',  threeAxis:[0,1,0], invert:true,  bedSide:true  },
+    { name:'B',     parent:'Z',     type:'rotary',  gcode:'mb',  threeAxis:[0,0,-1],invert:false, bedSide:true  },
+    { name:'C',     parent:'B',     type:'rotary',  gcode:'mc',  threeAxis:[0,1,0], invert:false, bedSide:true  },
+    { name:'Y',     parent:'Frame', type:'linear',  gcode:'my',  threeAxis:[0,0,-1],invert:false, bedSide:false },
+    { name:'X',     parent:'Y',     type:'linear',  gcode:'mx',  threeAxis:[1,0,0], invert:false, bedSide:false },
+  ],
+  bedPart:  'C',
+  toolPart: 'X',
+  bedRotAxes: [
+    { gcode:'mb', axis:[0,0,-1], invert:false },
+    { gcode:'mc', axis:[0,1,0],  invert:false },
+  ]
+};
+
+// Active kinematics — can be overridden by machine.json
+let machineKinematics = JSON.parse(JSON.stringify(DEFAULT_KINEMATICS));
+
+// Derived: flat list of part names in definition order
+function getPartNames(){ return machineKinematics.parts.map(p=>p.name); }
+const MACHINE_PARTS = ['Frame','Z','B','C','Y','X']; // kept for backwards compat, rebuilt on load
 
 const machineGroup = new THREE.Group();
 const mGrp = {};
@@ -1616,6 +1707,61 @@ const machMat = (part) => {
   const col = document.getElementById(`mc-${part}-col`)?.value ?? '#5577aa';
   return new THREE.MeshLambertMaterial({color:col, transparent:op<1, opacity:op, side:THREE.DoubleSide});
 };
+
+
+// ── Core kinematics functions ─────────────────────────────────────────────
+
+// Build the Three.js group hierarchy from machineKinematics.parts
+function buildKinematicTree(){
+  const parts = machineKinematics.parts;
+  // Create a group for each part
+  for(const p of parts){
+    mGrp[p.name] = new THREE.Group();
+    mGrp[p.name].name = p.name;
+  }
+  // Wire up parent-child relationships
+  for(const p of parts){
+    const parent = p.parent ? mGrp[p.parent] : machineGroup;
+    parent.add(mGrp[p.name]);
+  }
+  if(!machineGroup.parent) rootGroup.add(machineGroup);
+  machineGroup.rotation.set(0,0,0);
+  machineGroup.visible = true;
+}
+
+// Apply the current move to all kinematic groups
+function applyKinematicsToGroups(m){
+  const THREE_AXES = {
+    'X': new THREE.Vector3(1,0,0),
+    'Y': new THREE.Vector3(0,1,0),
+    'Z': new THREE.Vector3(0,0,1),
+  };
+  for(const p of machineKinematics.parts){
+    const grp = mGrp[p.name]; if(!grp || p.type==='static') continue;
+    const raw = m[p.gcode] || 0;
+    const val = p.invert ? -raw : raw;
+    const ax  = new THREE.Vector3(p.threeAxis[0], p.threeAxis[1], p.threeAxis[2]);
+    if(p.type === 'linear'){
+      grp.position.set(
+        ax.x * val,
+        ax.y * val,
+        ax.z * val
+      );
+    } else if(p.type === 'rotary'){
+      grp.rotation.set(0,0,0);
+      grp.rotateOnAxis(ax, val * Math.PI / 180);
+    }
+  }
+}
+
+// Rebuild MACHINE_PARTS array from active kinematics (used by appearance, collision etc.)
+function syncMachineParts(){
+  MACHINE_PARTS.length = 0;
+  for(const p of machineKinematics.parts) MACHINE_PARTS.push(p.name);
+  // Re-render collision panel if open
+  if(typeof renderProxyList === 'function') renderProxyList();
+  if(typeof rebuildProxyWireframes === 'function') rebuildProxyWireframes();
+}
 
 // Fetch machine folder list from GitHub API
 async function fetchMachineList(){
@@ -1656,14 +1802,8 @@ async function loadMachine(machineName){
   disposeMachine();
   document.getElementById('tb-status').textContent='loading machine…';
 
-  // Bed side: Frame > Z > B > C (C IS the bed)
-  mGrp.Frame = new THREE.Group(); machineGroup.add(mGrp.Frame);
-  mGrp.Z     = new THREE.Group(); machineGroup.add(mGrp.Z);
-  mGrp.B     = new THREE.Group(); mGrp.Z.add(mGrp.B);
-  mGrp.C     = new THREE.Group(); mGrp.B.add(mGrp.C);
-  // Toolhead side: Y moves under machine root, X under Y
-  mGrp.Y = new THREE.Group(); machineGroup.add(mGrp.Y);
-  mGrp.X = new THREE.Group(); mGrp.Y.add(mGrp.X);
+  // Build kinematic tree from machineKinematics config
+  buildKinematicTree();
 
   if(!machineGroup.parent) rootGroup.add(machineGroup);
   machineGroup.rotation.set(0, 0, 0);
@@ -1673,7 +1813,8 @@ async function loadMachine(machineName){
   const base = `${MACHINES_RAW}/${encodeURIComponent(machineName)}`;
   let loaded=0;
 
-  const promises = MACHINE_PARTS.map(name=>new Promise(resolve=>{
+  const partNames = getPartNames();
+  const promises = partNames.map(name=>new Promise(resolve=>{
     loader.load(
       `${base}/${name}.stl`,
       geo=>{
@@ -1681,7 +1822,7 @@ async function loadMachine(machineName){
         mesh.rotation.x=-Math.PI/2;
         mGrp[name].add(mesh);
         loaded++;
-        document.getElementById('tb-status').textContent=`loading machine… ${loaded}/${MACHINE_PARTS.length}`;
+        document.getElementById('tb-status').textContent=`loading machine… ${loaded}/${partNames.length}`;
         resolve();
       },
       null,
@@ -1734,26 +1875,16 @@ function updateMachine(moveIdx){
   machineGroup.visible=document.getElementById('showMach').checked;
   if(!machineGroup.visible) return;
 
-  let mx=0,my=0,mz=0,mb=0,mc=0;
-  if(allMoves.length && moveIdx>0){
-    const m=allMoves[Math.min(moveIdx-1,allMoves.length-1)];
-    mx=m.mx;my=m.my;mz=m.mz;mb=m.mb;mc=m.mc;
-  }
+  const m = (allMoves.length && moveIdx>0)
+    ? allMoves[Math.min(moveIdx-1, allMoves.length-1)]
+    : {mx:0,my:0,mz:0,mb:0,mc:0,me:0};
 
-  // Machine origin offset (corrects STL export origin vs machine zero)
   const ox=parseFloat(document.getElementById('mc-ox').value)||0;
   const oy=parseFloat(document.getElementById('mc-oy').value)||0;
   const oz=parseFloat(document.getElementById('mc-oz').value)||0;
-  machineGroup.position.set(ox, oz, -oy); // apply in Three.js coords
+  machineGroup.position.set(ox, oz, -oy);
 
-  // Bed side: Z↑, B rotates Y, C IS the bed (rotates on B-local Y)
-  if(mGrp.Z) mGrp.Z.position.set(0, -mz, 0);
-  if(mGrp.B){ mGrp.B.rotation.set(0,0,0); mGrp.B.rotateZ(-mb*Math.PI/180); }
-  if(mGrp.C){ mGrp.C.rotation.set(0,0,0); mGrp.C.rotateY(mc*Math.PI/180); }
-
-  // Toolhead side: Y translates in -Z, X carries toolhead
-  if(mGrp.Y) mGrp.Y.position.set(0, 0, -my);
-  if(mGrp.X) mGrp.X.position.set(mx, 0, 0);
+  applyKinematicsToGroups(m);
 }
 
 function applyMachineAppearance(){
@@ -1871,10 +2002,18 @@ function parseGcode(text){
   return result;
 }
 
-function toPart(x,y,z,bDeg,cDeg){
-  const b=bDeg*Math.PI/180, c=cDeg*Math.PI/180;
-  const xb=x*Math.cos(-b)+z*Math.sin(-b), yb=y, zb=-x*Math.sin(-b)+z*Math.cos(-b);
-  return [xb*Math.cos(-c)-yb*Math.sin(-c), xb*Math.sin(-c)+yb*Math.cos(-c), zb];
+// toPart: transform machine-frame coords into part (bed) frame
+// Applies the inverse of each bedRotAxis rotation in reverse order.
+function toPart(x, y, z, bDeg, cDeg){
+  // Build a fake move object so we can reuse calcBedQuat
+  const fakeMove = { mb: bDeg, mc: cDeg };
+  // Get the combined bed rotation quaternion
+  const q = calcBedQuat(fakeMove);
+  // Apply inverse rotation to bring world point into part frame
+  const v = new THREE.Vector3(x, z, -y); // Three.js coord convention (Y-up, Z-forward=-Y)
+  v.applyQuaternion(q.clone().invert());
+  // Return as [x, y, z] in part frame (inverse Three.js convention)
+  return [v.x, -v.z, v.y];
 }
 
 function layerColor(layer,maxLayer){
@@ -3686,7 +3825,7 @@ function updateNozzlePositionFromMove(m){
   if(usePart){
     const [wx,wy,wz]=toPart(m.mx,m.my,m.mz,m.mb,m.mc);
     nozzleMesh.position.set(wx,wz,-wy);
-    nozzleMesh.quaternion.copy(calcNozzlePartQuat(m.mb*Math.PI/180,m.mc*Math.PI/180));
+    nozzleMesh.quaternion.copy(calcNozzlePartQuat(m));
   } else {
     nozzleMesh.position.set(m.mx,0,-m.my);
     nozzleMesh.quaternion.set(0,0,0,1);
@@ -3695,7 +3834,7 @@ function updateNozzlePositionFromMove(m){
 function updateBedRotationFromMove(m){
   const usePart = document.getElementById('viewMode').value==='part';
   if(usePart||!m){bedGroup.quaternion.set(0,0,0,1);bedGroup.position.set(0,0,0);return;}
-  bedGroup.quaternion.copy(calcBedQuat(m.mb*Math.PI/180,m.mc*Math.PI/180));
+  bedGroup.quaternion.copy(calcBedQuat(m));
   bedGroup.position.set(0,-m.mz,0);
 }
 function updateMachineFromMove(m){
@@ -3706,11 +3845,7 @@ function updateMachineFromMove(m){
   const oy=parseFloat(document.getElementById('mc-oy').value)||0;
   const oz=parseFloat(document.getElementById('mc-oz').value)||0;
   machineGroup.position.set(ox,oz,-oy);
-  if(mGrp.Z) mGrp.Z.position.set(0,-m.mz,0);
-  if(mGrp.B){mGrp.B.rotation.set(0,0,0);mGrp.B.rotateZ(-m.mb*Math.PI/180);}
-  if(mGrp.C){mGrp.C.rotation.set(0,0,0);mGrp.C.rotateY(m.mc*Math.PI/180);}
-  if(mGrp.Y) mGrp.Y.position.set(0,0,-m.my);
-  if(mGrp.X) mGrp.X.position.set(m.mx,0,0);
+  applyKinematicsToGroups(m);
 }
 
 function setJogEnabled(enabled){
@@ -3893,6 +4028,7 @@ function collectMachineConfig() {
     collisionEnabled:    document.getElementById('coll-enabled')?.checked,
     collisionShowProxy:  document.getElementById('coll-show-proxies')?.checked,
     collisionPrintMesh:  document.getElementById('coll-print-enabled')?.checked,
+    kinematics: JSON.parse(JSON.stringify(machineKinematics)),
   };
 }
 
@@ -3938,6 +4074,21 @@ function applyMachineConfig(cfg) {
   if(cfg.collisionShowProxy != null) set('coll-show-proxies', cfg.collisionShowProxy);
   if(cfg.collisionPrintMesh != null) set('coll-print-enabled', cfg.collisionPrintMesh);
 
+  // Apply kinematics if present
+  if(cfg.kinematics){
+    machineKinematics = JSON.parse(JSON.stringify(cfg.kinematics));
+    syncMachineParts();
+    // Rebuild tree if machine is loaded
+    if(machineLoaded){
+      // Detach all existing groups
+      for(const grp of Object.values(mGrp)) if(grp.parent) grp.parent.remove(grp);
+      Object.keys(mGrp).forEach(k=>delete mGrp[k]);
+      buildKinematicTree();
+      // Re-attach STL meshes — they'll have been removed, user needs to reload machine
+      document.getElementById('tb-status').textContent='Kinematics changed — reload machine to apply';
+    }
+  }
+
   // Apply all the visual changes
   buildBuildplate();
   buildNozzle();
@@ -3975,6 +4126,168 @@ document.getElementById('s-import-file').addEventListener('change', function() {
   reader.readAsText(file);
   this.value = '';
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MACHINE BUILDER
+// UI to edit machineKinematics — the kinematic tree, axes, bed/tool assignment.
+// Changes take effect when "Apply & Reload Machine" is clicked.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderKbParts(){
+  const container = document.getElementById('kb-parts-list');
+  if(!container) return;
+  const parts = machineKinematics.parts;
+  const partNames = parts.map(p=>p.name);
+
+  container.innerHTML = `
+    <div style="display:grid;grid-template-columns:80px 80px 60px 80px 80px 60px 32px;gap:4px;font-family:var(--mono);font-size:9px;color:var(--text2);padding:0 0 4px;letter-spacing:0.08em;">
+      <span>NAME</span><span>PARENT</span><span>TYPE</span><span>GCODE</span><span>AXIS</span><span>INVERT</span><span></span>
+    </div>
+  ` + parts.map((p,i) => {
+    const parentOpts = ['(root)',...partNames.filter(n=>n!==p.name)]
+      .map(n=>`<option value="${n==='(root)'?'':n}" ${(p.parent||'')===(n==='(root)'?'':n)?'selected':''}>${n}</option>`).join('');
+    const typeOpts = ['static','linear','rotary']
+      .map(t=>`<option value="${t}" ${p.type===t?'selected':''}>${t}</option>`).join('');
+    const gcodeOpts = ['(none)','mx','my','mz','mb','mc']
+      .map(v=>`<option value="${v==='(none)'?'':v}" ${(p.gcode||'')===(v==='(none)'?'':v)?'selected':''}>${v}</option>`).join('');
+    const axVal = p.threeAxis.join(',');
+    const axOptsLocal = [
+      ['1,0,0','+X'],['-1,0,0','-X'],
+      ['0,1,0','+Y'],['0,-1,0','-Y'],
+      ['0,0,1','+Z'],['0,0,-1','-Z'],
+    ].map(([v,l])=>`<option value="${v}" ${axVal===v?'selected':''}>${l}</option>`).join('');
+    return `
+      <div style="display:grid;grid-template-columns:80px 80px 60px 80px 80px 60px 32px;gap:4px;align-items:center;padding:3px 0;border-bottom:1px solid var(--border-lt);">
+        <input class="s-input" style="padding:2px 4px;font-size:10px;" value="${p.name}" data-ki="${i}" data-field="name">
+        <select class="s-input" style="padding:2px 4px;font-size:10px;" data-ki="${i}" data-field="parent">${parentOpts}</select>
+        <select class="s-input" style="padding:2px 4px;font-size:10px;" data-ki="${i}" data-field="type">${typeOpts}</select>
+        <select class="s-input" style="padding:2px 4px;font-size:10px;" data-ki="${i}" data-field="gcode">${gcodeOpts}</select>
+        <select class="s-input" style="padding:2px 4px;font-size:10px;" data-ki="${i}" data-field="threeAxis">${axOptsLocal}</select>
+        <label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer;justify-content:center;">
+          <input type="checkbox" data-ki="${i}" data-field="invert" ${p.invert?'checked':''}>inv
+        </label>
+        <button class="del-btn" data-ki="${i}" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;">x</button>
+      </div>`;
+  }).join('');
+
+  container.addEventListener('change', e=>{
+    const el = e.target; const i = parseInt(el.dataset.ki); if(isNaN(i)) return;
+    const field = el.dataset.field;
+    if(field==='threeAxis') machineKinematics.parts[i].threeAxis = el.value.split(',').map(Number);
+    else if(field==='invert') machineKinematics.parts[i].invert = el.checked;
+    else if(field==='parent') machineKinematics.parts[i].parent = el.value || null;
+    else if(field==='gcode') machineKinematics.parts[i].gcode = el.value || null;
+    else machineKinematics.parts[i][field] = el.value;
+  });
+  container.addEventListener('input', e=>{
+    const el = e.target; const i = parseInt(el.dataset.ki);
+    if(isNaN(i) || el.dataset.field !== 'name') return;
+    machineKinematics.parts[i].name = el.value;
+  });
+  container.addEventListener('click', e=>{
+    if(!e.target.classList.contains('del-btn')) return;
+    machineKinematics.parts.splice(parseInt(e.target.dataset.ki), 1);
+    renderKbParts();
+  });
+}
+
+function renderKbRotAxes(){
+  const container = document.getElementById('kb-rot-axes-list');
+  if(!container) return;
+  const axes = machineKinematics.bedRotAxes;
+  container.innerHTML = axes.map((ax,i) => {
+    const gOpts = ['mx','my','mz','mb','mc']
+      .map(v=>`<option value="${v}" ${ax.gcode===v?'selected':''}>${v}</option>`).join('');
+    const axOpts = [
+      ['1,0,0','+X'],['-1,0,0','-X'],
+      ['0,1,0','+Y'],['0,-1,0','-Y'],
+      ['0,0,1','+Z'],['0,0,-1','-Z'],
+    ].map(([v,l])=>`<option value="${v}" ${ax.axis.join(',')===v?'selected':''}>${l}</option>`).join('');
+    return `
+      <div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-lt);">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text2);">G-code</span>
+        <select class="s-input" style="padding:2px 4px;font-size:10px;" data-rai="${i}" data-field="gcode">${gOpts}</select>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text2);">Axis</span>
+        <select class="s-input" style="padding:2px 4px;font-size:10px;" data-rai="${i}" data-field="axis">${axOpts}</select>
+        <label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer;">
+          <input type="checkbox" data-rai="${i}" data-field="invert" ${ax.invert?'checked':''}>inv
+        </label>
+        <button class="del-btn" data-rai="${i}" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;">x</button>
+      </div>`;
+  }).join('');
+
+  container.addEventListener('change', e=>{
+    const el = e.target; const i = parseInt(el.dataset.rai); if(isNaN(i)) return;
+    if(el.dataset.field==='axis') machineKinematics.bedRotAxes[i].axis = el.value.split(',').map(Number);
+    else if(el.dataset.field==='invert') machineKinematics.bedRotAxes[i].invert = el.checked;
+    else machineKinematics.bedRotAxes[i][el.dataset.field] = el.value;
+  });
+  container.addEventListener('click', e=>{
+    if(!e.target.classList.contains('del-btn')) return;
+    machineKinematics.bedRotAxes.splice(parseInt(e.target.dataset.rai), 1);
+    renderKbRotAxes();
+  });
+}
+
+function openKb(){
+  renderKbParts();
+  renderKbRotAxes();
+  const partNames = machineKinematics.parts.map(p=>p.name);
+  ['kb-bed-part','kb-tool-part'].forEach(id=>{
+    const sel = document.getElementById(id); if(!sel) return;
+    sel.innerHTML = partNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+  });
+  const bedSel = document.getElementById('kb-bed-part');
+  if(bedSel) bedSel.value = machineKinematics.bedPart;
+  const toolSel = document.getElementById('kb-tool-part');
+  if(toolSel) toolSel.value = machineKinematics.toolPart;
+  document.getElementById('kb-overlay').classList.add('open');
+}
+
+document.getElementById('kinematicsBtn').addEventListener('click', ()=>{
+  document.getElementById('settings-overlay').classList.remove('open');
+  openKb();
+});
+document.getElementById('kbClose').addEventListener('click', ()=>{
+  document.getElementById('kb-overlay').classList.remove('open');
+});
+document.getElementById('kb-overlay').addEventListener('click', e=>{
+  if(e.target===e.currentTarget) e.currentTarget.classList.remove('open');
+});
+document.getElementById('kb-add-part').addEventListener('click', ()=>{
+  machineKinematics.parts.push({name:'New',parent:null,type:'linear',gcode:'mx',threeAxis:[1,0,0],invert:false,bedSide:false});
+  renderKbParts();
+});
+document.getElementById('kb-add-rot-axis').addEventListener('click', ()=>{
+  machineKinematics.bedRotAxes.push({gcode:'mb',axis:[0,0,-1],invert:false});
+  renderKbRotAxes();
+});
+document.getElementById('kb-reset-btn').addEventListener('click', ()=>{
+  if(!confirm('Reset to default CoreXY-BC kinematics?')) return;
+  machineKinematics = JSON.parse(JSON.stringify(DEFAULT_KINEMATICS));
+  openKb();
+});
+document.getElementById('kb-apply-btn').addEventListener('click', ()=>{
+  machineKinematics.bedPart  = document.getElementById('kb-bed-part').value;
+  machineKinematics.toolPart = document.getElementById('kb-tool-part').value;
+  const names = machineKinematics.parts.map(p=>p.name);
+  for(const p of machineKinematics.parts){
+    if(p.parent && !names.includes(p.parent)){
+      alert(`Part "${p.name}" has unknown parent "${p.parent}"`); return;
+    }
+  }
+  syncMachineParts();
+  document.getElementById('kb-overlay').classList.remove('open');
+  const machineName = document.getElementById('machineSelect').value;
+  if(machineName && machineLoaded){
+    currentMachineName = '';
+    loadMachine(machineName);
+  } else {
+    document.getElementById('tb-status').textContent = 'Kinematics updated';
+  }
+});
+
 
 // ── Mobile drawer system ──────────────────────────────────────────
 (function(){
