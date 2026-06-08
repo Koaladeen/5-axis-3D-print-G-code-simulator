@@ -419,11 +419,11 @@
   #coll-modal .modal-head > div { flex-wrap: wrap; gap: 6px; width: 100%; }
   #coll-modal .modal-head label { font-size: 10px !important; flex-shrink: 1; }
   #coll-list { overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
-  /* Force all coll panel children to respect panel width */
-  #coll-modal * { max-width: 100%; box-sizing: border-box; }
-  #coll-modal .modal-head > div { width: 100%; }
-  #coll-selected-part { white-space: normal; word-break: break-word; }
-  #coll-groups-bar { overflow: hidden; }
+  /* Force everything inside the panel to respect its width */
+  #coll-overlay * { box-sizing: border-box; max-width: 100%; }
+  #coll-overlay input, #coll-overlay select { min-width: 0; }
+  #coll-selected-part { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #coll-groups-bar { overflow-x: auto; overflow-y: hidden; }
   .modal-box {
     background: var(--ui-bg0); border: 1px solid var(--border-hi);
     border-top: 3px solid var(--accent);
@@ -479,19 +479,19 @@
     width: 100%; overflow: hidden;
   }
   .coll-proxy:hover { background: var(--ui-bg1); }
-  .coll-proxy-row1 { display: flex; gap: 3px; align-items: center; width: 100%; min-width: 0; overflow: hidden; }
-  .coll-proxy-row2 { display: flex; gap: 2px; align-items: center; width: 100%; min-width: 0; overflow: hidden; }
+  .coll-proxy-row1 { display: flex; gap: 3px; align-items: center; width: 100%; min-width: 0; overflow: hidden; box-sizing: border-box; }
+  .coll-proxy-row2 { display: flex; gap: 2px; align-items: center; width: 100%; min-width: 0; overflow: hidden; box-sizing: border-box; }
   .coll-proxy input, .coll-proxy select {
     background: #fff; border: 1px solid var(--border);
     color: var(--text0); font-family: var(--mono); font-size: 10px;
     padding: 2px 3px; border-radius: 0; box-sizing: border-box;
   }
   /* proxy row1: part selector fills, then type, then delete */
-  .cp-part  { flex: 1; min-width: 0; font-size: 10px; overflow: hidden; }
+  .cp-part  { flex: 1; min-width: 0; max-width: 130px; font-size: 10px; overflow: hidden; }
   .cp-group { font-family: var(--mono); font-size: 9px; color: var(--cyan); white-space: nowrap; padding: 0 2px; flex-shrink: 0; }
-  .cp-type  { width: 54px; flex-shrink: 0; font-size: 10px; }
+  .cp-type  { width: 50px; flex-shrink: 0; font-size: 9px; }
   /* proxy row2: labels + 3 small number inputs + offset fills */
-  .cp-num   { width: 38px; flex-shrink: 0; text-align: right; }
+  .cp-num   { width: 34px; flex-shrink: 0; text-align: right; min-width: 0; font-size: 10px; }
   .cp-off   { flex: 1; min-width: 0; font-size: 9px; }
   .coll-proxy .del-btn {
     background: none; border: none; color: var(--text2);
@@ -505,7 +505,7 @@
   #coll-groups-bar span { font-size: 9px !important; }
   /* Footer buttons wrap into 2 columns */
   #coll-footer { padding: 6px 8px; border-top: 1px solid var(--border); display: flex; gap: 4px; flex-wrap: wrap; background: var(--ui-bg1); }
-  #coll-footer .h-btn { flex: 1 1 calc(50% - 4px); font-size: 9px; padding: 5px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #coll-footer .h-btn { flex: 1 1 calc(50% - 4px); min-width: 0; font-size: 9px; padding: 5px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
   .coll-header-row { display: none; }
   #coll-status { font-size: 10px; font-family: var(--mono); padding: 6px 12px; color: var(--text2); border-top: 1px solid var(--border-lt); min-height: 24px; background: var(--ui-bg1); }
 
