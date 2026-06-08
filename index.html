@@ -800,23 +800,23 @@
   <!-- Collision configurator modal -->
   <div id="coll-overlay">
     <div id="coll-modal" class="modal-box wide">
-      <div class="modal-head" style="position:relative;flex-wrap:wrap;gap:4px;padding-right:32px;">
-        <span class="title">COLLISION PROXIES</span>
-        <button class="close-btn" id="collClose" style="position:absolute;top:8px;right:10px;font-size:20px;line-height:1;">×</button>
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;padding-top:2px;">
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;">
-            <input type="checkbox" id="coll-show-proxies">
-            <span style="color:var(--text1);">Show proxies</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;">
-            <input type="checkbox" id="coll-enabled" checked>
-            <span style="color:var(--text1);">Check collisions</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:400;cursor:pointer;" title="Experimental: checks convex hull of printed geometry against machine proxies. May be slow on large files.">
-            <input type="checkbox" id="coll-print-enabled">
-            <span style="color:var(--amber);">&#x2697; Print mesh (exp.)</span>
-          </label>
-        </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--ui-bg1);border-bottom:1px solid var(--border);flex-shrink:0;">
+        <span style="font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--text0);">COLLISION PROXIES</span>
+        <button id="collClose" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:22px;line-height:1;padding:0 2px;">×</button>
+      </div>
+      <div style="padding:6px 10px;background:var(--ui-bg1);border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex-shrink:0;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;">
+          <input type="checkbox" id="coll-show-proxies">
+          <span style="color:var(--text1);">Show proxies</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;">
+          <input type="checkbox" id="coll-enabled" checked>
+          <span style="color:var(--text1);">Check collisions</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;" title="Experimental: checks convex hull of printed geometry against machine proxies. May be slow on large files.">
+          <input type="checkbox" id="coll-print-enabled">
+          <span style="color:var(--amber);">&#x2697; Print mesh (exp.)</span>
+        </label>
       </div>
       <div style="padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--cyan);line-height:1.4;" id="coll-selected-part">Click a machine part in the 3D view to select it for proxy assignment</div>
       <div id="coll-groups-bar" style="padding:5px 8px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;gap:3px 6px;align-items:center;flex-wrap:wrap;font-size:9px;overflow:hidden;">
