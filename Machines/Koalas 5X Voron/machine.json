@@ -30,7 +30,7 @@
     },
     "b": {
       "min": -32,
-      "max": 110
+      "max": 120
     },
     "c": {
       "min": -99999,
@@ -1008,7 +1008,7 @@
           0,
           -1
         ],
-        "invert": true,
+        "invert": false,
         "bedSide": true
       },
       {
@@ -1059,7 +1059,7 @@
         "axis": [
           0,
           0,
-          -1
+          1
         ],
         "invert": false
       },
