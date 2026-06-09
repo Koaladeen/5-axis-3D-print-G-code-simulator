@@ -49,23 +49,23 @@
     },
     "Z": {
       "color": "#5577aa",
-      "opacity": 0.3
+      "opacity": 1
     },
     "B": {
       "color": "#5577aa",
-      "opacity": 0.3
+      "opacity": 1
     },
     "C": {
       "color": "#3a6a5a",
-      "opacity": 0.3
+      "opacity": 1
     },
     "Y": {
       "color": "#5577aa",
-      "opacity": 0.4
+      "opacity": 1
     },
     "X": {
       "color": "#aa6633",
-      "opacity": 0.3
+      "opacity": 1
     }
   },
   "nozzleDiameter": 0.4,
