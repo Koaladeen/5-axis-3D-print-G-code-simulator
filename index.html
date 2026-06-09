@@ -2099,30 +2099,25 @@ function buildMeshes(nd){
 
   function makeInstanced(segs,color,visible){
     if(!segs.length||!visible) return null;
-    const useVertexColor = colorByLayer || colorByEflow;
-    const mat=new THREE.MeshLambertMaterial({color, vertexColors:useVertexColor});
+    const mat=new THREE.MeshLambertMaterial({color:0xffffff});
     const mesh=new THREE.InstancedMesh(cylGeo,mat,segs.length);
-    const colors=useVertexColor ? new Float32Array(segs.length*3) : null;
+    const flatCol=new THREE.Color(color);
     for(let i=0;i<segs.length;i++){
       const [x0,y0,z0]=segs[i].s0,[x1,y1,z1]=segs[i].s1;
       const v0=new THREE.Vector3(x0,z0,-y0),v1=new THREE.Vector3(x1,z1,-y1);
       const len=v0.distanceTo(v1);
-      if(len<0.001){mesh.setMatrixAt(i,new THREE.Matrix4());continue;}
-      const ratio = colorByEflow ? extrusionRatio(segs[i], len) : 1.0;
+      if(len<0.001){mesh.setMatrixAt(i,new THREE.Matrix4());mesh.setColorAt(i,flatCol);continue;}
+      const ratio=colorByEflow?extrusionRatio(segs[i],len):1.0;
       dummy.position.copy(v0).lerp(v1,0.5);
-      dummy.scale.set(ratio, len, ratio);
+      dummy.scale.set(ratio,len,ratio);
       dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),v1.clone().sub(v0).normalize());
       dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix);
-      if(colorByLayer){
-        const col=layerColor(segs[i].layer,maxLayer);
-        colors[i*3]=col.r; colors[i*3+1]=col.g; colors[i*3+2]=col.b;
-      } else if(colorByEflow){
-        const col=eflowColor(ratio);
-        colors[i*3]=col.r; colors[i*3+1]=col.g; colors[i*3+2]=col.b;
-      }
+      if(colorByLayer)       mesh.setColorAt(i, layerColor(segs[i].layer,maxLayer));
+      else if(colorByEflow)  mesh.setColorAt(i, eflowColor(ratio));
+      else                   mesh.setColorAt(i, flatCol);
     }
     mesh.instanceMatrix.needsUpdate=true;
-    if(useVertexColor) mesh.instanceColor=new THREE.InstancedBufferAttribute(colors,3);
+    if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
     mesh.count=0; mesh.userData.fullCount=segs.length;
     return mesh;
   }
