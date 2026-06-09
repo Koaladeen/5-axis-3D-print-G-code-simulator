@@ -2053,7 +2053,8 @@ function parseGcode(text){
 // Applies the inverse of each bedRotAxis rotation in reverse order.
 function toPart(x, y, z, bDeg, cDeg){
   // Build a fake move object so we can reuse calcBedQuat
-  const fakeMove = { mb: bDeg, mc: cDeg };
+  // Negate bDeg: the (x,z,-y) coord swap flips handedness, negating b keeps toPart consistent
+  const fakeMove = { mb: -bDeg, mc: cDeg };
   // Get the combined bed rotation quaternion
   const q = calcBedQuat(fakeMove);
   // Apply inverse rotation to bring world point into part frame
