@@ -963,8 +963,8 @@
           <input class="s-input" id="lim-zmax" type="number" value="90" step="1">
 
           <span class="s-label" style="color:#f59e0b;">B</span>
-          <input class="s-input" id="lim-bmin" type="number" value="-120" step="1">
-          <input class="s-input" id="lim-bmax" type="number" value="32" step="1">
+          <input class="s-input" id="lim-bmin" type="number" value="-32" step="1">
+          <input class="s-input" id="lim-bmax" type="number" value="120" step="1">
 
           <span class="s-label" style="color:#a855f7;">C</span>
           <input class="s-input" id="lim-cmin" type="number" value="-99999" step="1">
@@ -1221,8 +1221,8 @@
           <input class="s-input" id="kb-lim-zmax" type="number" value="90" step="1">
 
           <span class="s-label" style="color:#f59e0b;">B</span>
-          <input class="s-input" id="kb-lim-bmin" type="number" value="-120" step="1">
-          <input class="s-input" id="kb-lim-bmax" type="number" value="32" step="1">
+          <input class="s-input" id="kb-lim-bmin" type="number" value="-32" step="1">
+          <input class="s-input" id="kb-lim-bmax" type="number" value="120" step="1">
 
           <span class="s-label" style="color:#a855f7;">C</span>
           <input class="s-input" id="kb-lim-cmin" type="number" value="-99999" step="1">
@@ -1707,18 +1707,18 @@ const MACHINES_RAW = 'https://raw.githubusercontent.com/Koaladeen/5-axis-3D-prin
 
 const DEFAULT_KINEMATICS = {
   parts: [
-    { name:'Frame', parent:null,    type:'static',  gcode:null,  threeAxis:[0,1,0], invert:false, bedSide:true  },
-    { name:'Z',     parent:'Frame', type:'linear',  gcode:'mz',  threeAxis:[0,1,0], invert:true,  bedSide:true  },
-    { name:'B',     parent:'Z',     type:'rotary',  gcode:'mb',  threeAxis:[0,0,1], invert:false, bedSide:true  },
-    { name:'C',     parent:'B',     type:'rotary',  gcode:'mc',  threeAxis:[0,1,0], invert:false, bedSide:true  },
-    { name:'Y',     parent:'Frame', type:'linear',  gcode:'my',  threeAxis:[0,0,-1],invert:false, bedSide:false },
-    { name:'X',     parent:'Y',     type:'linear',  gcode:'mx',  threeAxis:[1,0,0], invert:false, bedSide:false },
+    { name:'Frame', parent:null,    type:'static',  gcode:null,  threeAxis:[0,1,0],  invert:false, bedSide:true  },
+    { name:'Z',     parent:'Frame', type:'linear',  gcode:'mz',  threeAxis:[0,1,0],  invert:true,  bedSide:true  },
+    { name:'B',     parent:'Z',     type:'rotary',  gcode:'mb',  threeAxis:[0,0,-1], invert:true,  bedSide:true  },
+    { name:'C',     parent:'B',     type:'rotary',  gcode:'mc',  threeAxis:[0,1,0],  invert:false, bedSide:true  },
+    { name:'Y',     parent:'Frame', type:'linear',  gcode:'my',  threeAxis:[0,0,-1], invert:false, bedSide:false },
+    { name:'X',     parent:'Y',     type:'linear',  gcode:'mx',  threeAxis:[1,0,0],  invert:false, bedSide:false },
   ],
   bedPart:  'C',
   toolPart: 'X',
   bedRotAxes: [
     { gcode:'mb', axis:[0,0,1], invert:false },
-    { gcode:'mc', axis:[0,1,0], invert:false },
+    { gcode:'mc', axis:[0,1,0], invert:true  },
   ]
 };
 
@@ -3828,7 +3828,7 @@ const JOG_AXES = [
   {key:'x', label:'X', color:'var(--ax-x)', min:-50, max:50,  step:0.1,  unit:'mm', deg:false},
   {key:'y', label:'Y', color:'var(--ax-y)', min:-50, max:50,  step:0.1,  unit:'mm', deg:false},
   {key:'z', label:'Z', color:'var(--ax-z)', min:0,   max:90,  step:0.1,  unit:'mm', deg:false},
-  {key:'b', label:'B', color:'var(--ax-b)', min:-120,max:32,  step:0.5,  unit:'°',  deg:true},
+  {key:'b', label:'B', color:'var(--ax-b)', min:-32, max:120, step:0.5,  unit:'°',  deg:true},
   {key:'c', label:'C', color:'var(--ax-c)', min:-360,max:360, step:1,    unit:'°',  deg:true},
 ];
 
