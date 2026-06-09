@@ -1200,6 +1200,36 @@
         <button class="h-btn" id="kb-add-rot-axis" style="margin-top:8px;width:100%;">+ Add rotation axis</button>
       </div>
 
+      <div class="modal-section">
+        <div class="modal-section-title">Axis Limits</div>
+        <div class="s-hint" style="margin-bottom:10px;">These are the same limits shown in Scene Settings. Changes here apply immediately.</div>
+        <div style="display:grid;grid-template-columns:1fr 80px 80px;gap:4px 6px;align-items:center;font-size:11px;margin-bottom:6px;">
+          <span style="color:var(--text2);font-family:var(--mono);">AXIS</span>
+          <span style="color:var(--text2);font-family:var(--mono);text-align:right;">MIN</span>
+          <span style="color:var(--text2);font-family:var(--mono);text-align:right;">MAX</span>
+
+          <span class="s-label" style="color:#ef4444;">X</span>
+          <input class="s-input" id="kb-lim-xmin" type="number" value="-50" step="1">
+          <input class="s-input" id="kb-lim-xmax" type="number" value="50" step="1">
+
+          <span class="s-label" style="color:#22c55e;">Y</span>
+          <input class="s-input" id="kb-lim-ymin" type="number" value="-50" step="1">
+          <input class="s-input" id="kb-lim-ymax" type="number" value="50" step="1">
+
+          <span class="s-label" style="color:#3b82f6;">Z</span>
+          <input class="s-input" id="kb-lim-zmin" type="number" value="0" step="1">
+          <input class="s-input" id="kb-lim-zmax" type="number" value="90" step="1">
+
+          <span class="s-label" style="color:#f59e0b;">B</span>
+          <input class="s-input" id="kb-lim-bmin" type="number" value="-120" step="1">
+          <input class="s-input" id="kb-lim-bmax" type="number" value="32" step="1">
+
+          <span class="s-label" style="color:#a855f7;">C</span>
+          <input class="s-input" id="kb-lim-cmin" type="number" value="-99999" step="1">
+          <input class="s-input" id="kb-lim-cmax" type="number" value="99999" step="1">
+        </div>
+      </div>
+
       <div class="modal-section" style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="s-apply" id="kb-apply-btn" style="flex:1;min-width:120px;">Apply &amp; Reload Machine</button>
         <button class="h-btn" id="kb-reset-btn" style="flex:1;min-width:120px;">Reset to Default</button>
@@ -1927,6 +1957,7 @@ document.getElementById('s-apply-btn').addEventListener('click',()=>{
   buildBuildplate();
   buildNozzle();
   checkLimits();
+  rebuildJogAxes();
   document.getElementById('settings-overlay').classList.remove('open');
 });
 // Chip toggles inside modal for bp/nz visibility
@@ -3830,6 +3861,27 @@ function buildJogPanel(){
   }
 }
 
+// Rebuild jog panel after axis limits change — updates slider min/max ranges
+function rebuildJogAxes(){
+  const L = getLimits();
+  JOG_AXES.forEach(ax => {
+    let newMin = L[ax.key+'min'] ?? ax.min;
+    let newMax = L[ax.key+'max'] ?? ax.max;
+    // Cap C axis jog range to ±720 for usability (99999 makes slider unusable)
+    if(ax.key === 'c'){
+      if(newMin < -720) newMin = -720;
+      if(newMax >  720) newMax =  720;
+    }
+    ax.min = newMin;
+    ax.max = newMax;
+    // Clamp current jog position to new range
+    jogPos[ax.key] = Math.max(ax.min, Math.min(ax.max, jogPos[ax.key]));
+  });
+  buildJogPanel();
+  // Also rebuild mobile jog if it exists
+  if(typeof buildMobJog === 'function') buildMobJog();
+}
+
 function onJogInput(key, val){
   if(isPlaying) return; // only when paused
   jogPos[key] = parseFloat(val);
@@ -4140,6 +4192,7 @@ function applyMachineConfig(cfg) {
   buildBuildplate();
   buildNozzle();
   checkLimits();
+  rebuildJogAxes();
   applyMachineAppearance();
   updateMachine(0);
 }
@@ -4278,6 +4331,15 @@ function renderKbRotAxes(){
 }
 
 function openKb(){
+  // Sync kb-lim-* inputs FROM the canonical lim-* inputs before opening
+  const LIMIT_AXES = ['x','y','z','b','c'];
+  LIMIT_AXES.forEach(ax => {
+    ['min','max'].forEach(side => {
+      const src = document.getElementById(`lim-${ax}${side}`);
+      const dst = document.getElementById(`kb-lim-${ax}${side}`);
+      if(src && dst) dst.value = src.value;
+    });
+  });
   renderKbParts();
   renderKbRotAxes();
   const partNames = machineKinematics.parts.map(p=>p.name);
@@ -4302,6 +4364,29 @@ document.getElementById('kbClose').addEventListener('click', ()=>{
 document.getElementById('kb-overlay').addEventListener('click', e=>{
   if(e.target===e.currentTarget) e.currentTarget.classList.remove('open');
 });
+
+// ── Two-way sync: kb-lim-* ↔ lim-* ──────────────────────────────
+// Whenever a kb-lim input changes, mirror to the canonical lim input and
+// rebuild the jog panel so slider ranges update immediately.
+(function(){
+  const LIMIT_AXES = ['x','y','z','b','c'];
+  LIMIT_AXES.forEach(ax => {
+    ['min','max'].forEach(side => {
+      const kbEl  = document.getElementById(`kb-lim-${ax}${side}`);
+      const limEl = document.getElementById(`lim-${ax}${side}`);
+      if(!kbEl || !limEl) return;
+      kbEl.addEventListener('input', () => {
+        limEl.value = kbEl.value;
+        rebuildJogAxes();
+      });
+      // Also sync from lim → kb when Settings modal changes
+      limEl.addEventListener('input', () => {
+        kbEl.value = limEl.value;
+        rebuildJogAxes();
+      });
+    });
+  });
+})();
 document.getElementById('kb-add-part').addEventListener('click', ()=>{
   machineKinematics.parts.push({name:'New',parent:null,type:'linear',gcode:'mx',threeAxis:[1,0,0],invert:false,bedSide:false});
   renderKbParts();
@@ -4325,6 +4410,17 @@ document.getElementById('kb-apply-btn').addEventListener('click', ()=>{
     }
   }
   syncMachineParts();
+  // Sync any limit changes made in Machine Builder back to canonical inputs
+  const LIMIT_AXES = ['x','y','z','b','c'];
+  LIMIT_AXES.forEach(ax => {
+    ['min','max'].forEach(side => {
+      const kbEl  = document.getElementById(`kb-lim-${ax}${side}`);
+      const limEl = document.getElementById(`lim-${ax}${side}`);
+      if(kbEl && limEl) limEl.value = kbEl.value;
+    });
+  });
+  rebuildJogAxes();
+  checkLimits();
   document.getElementById('kb-overlay').classList.remove('open');
   const machineName = document.getElementById('machineSelect').value;
   if(machineName && machineLoaded){
