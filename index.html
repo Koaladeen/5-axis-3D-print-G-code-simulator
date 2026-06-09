@@ -1709,7 +1709,7 @@ const DEFAULT_KINEMATICS = {
   parts: [
     { name:'Frame', parent:null,    type:'static',  gcode:null,  threeAxis:[0,1,0], invert:false, bedSide:true  },
     { name:'Z',     parent:'Frame', type:'linear',  gcode:'mz',  threeAxis:[0,1,0], invert:true,  bedSide:true  },
-    { name:'B',     parent:'Z',     type:'rotary',  gcode:'mb',  threeAxis:[0,0,-1],invert:false, bedSide:true  },
+    { name:'B',     parent:'Z',     type:'rotary',  gcode:'mb',  threeAxis:[0,0,1], invert:false, bedSide:true  },
     { name:'C',     parent:'B',     type:'rotary',  gcode:'mc',  threeAxis:[0,1,0], invert:false, bedSide:true  },
     { name:'Y',     parent:'Frame', type:'linear',  gcode:'my',  threeAxis:[0,0,-1],invert:false, bedSide:false },
     { name:'X',     parent:'Y',     type:'linear',  gcode:'mx',  threeAxis:[1,0,0], invert:false, bedSide:false },
@@ -1717,8 +1717,8 @@ const DEFAULT_KINEMATICS = {
   bedPart:  'C',
   toolPart: 'X',
   bedRotAxes: [
-    { gcode:'mb', axis:[0,0,-1], invert:false },
-    { gcode:'mc', axis:[0,1,0],  invert:false },
+    { gcode:'mb', axis:[0,0,1], invert:false },
+    { gcode:'mc', axis:[0,1,0], invert:false },
   ]
 };
 
