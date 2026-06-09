@@ -29,8 +29,8 @@
       "max": 90
     },
     "b": {
-      "min": -120,
-      "max": 32
+      "min": -32,
+      "max": 110
     },
     "c": {
       "min": -99999,
@@ -1008,7 +1008,7 @@
           0,
           -1
         ],
-        "invert": false,
+        "invert": true,
         "bedSide": true
       },
       {
