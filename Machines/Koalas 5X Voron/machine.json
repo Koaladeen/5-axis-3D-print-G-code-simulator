@@ -49,19 +49,19 @@
     },
     "Z": {
       "color": "#5577aa",
-      "opacity": 1
+      "opacity": 0.15
     },
     "B": {
       "color": "#5577aa",
-      "opacity": 1
+      "opacity": 0.3
     },
     "C": {
       "color": "#3a6a5a",
-      "opacity": 1
+      "opacity": 0.25
     },
     "Y": {
       "color": "#5577aa",
-      "opacity": 1
+      "opacity": 0.3
     },
     "X": {
       "color": "#aa6633",
@@ -1061,7 +1061,7 @@
           0,
           1
         ],
-        "invert": true
+        "invert": false
       },
       {
         "gcode": "mc",
@@ -1070,7 +1070,7 @@
           1,
           0
         ],
-        "invert": false
+        "invert": true
       }
     ]
   }
