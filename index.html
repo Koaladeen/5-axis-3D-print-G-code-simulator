@@ -328,6 +328,30 @@
   #update-banner .ub-dismiss:hover { color: #fff; border-color: rgba(255,255,255,0.6); }
 
   /* ── Right panel ── */
+  /* ── Eflow legend ── */
+  #eflow-legend { display:none; }
+  #eflow-legend.visible { display:block; }
+  .efl-head { font-family:var(--mono); font-size:9px; letter-spacing:0.08em; color:var(--text2); padding:6px 10px 3px; }
+  .efl-bar-wrap { padding:0 10px 4px; }
+  .efl-bar {
+    height:12px; border-radius:2px;
+    background: linear-gradient(to right,
+      rgb(13,51,204) 0%,
+      rgb(0,204,230) 25%,
+      rgb(26,217,38) 50%,
+      rgb(242,166,0) 75%,
+      rgb(230,20,13) 100%);
+    position:relative;
+  }
+  .efl-pointer {
+    position:absolute; top:-3px; width:2px; height:18px;
+    background:#fff; border:1px solid #000; border-radius:1px;
+    transform:translateX(-50%); transition:left 0.1s;
+    pointer-events:none;
+  }
+  .efl-labels { display:flex; justify-content:space-between; font-family:var(--mono); font-size:9px; color:var(--text2); padding:2px 10px 0; }
+  .efl-ratio { font-family:var(--mono); font-size:11px; text-align:center; padding:2px 10px 6px; font-weight:600; }
+
   #right-panel {
     background: var(--ui-bg0); border-left: 2px solid var(--border);
     display: flex; flex-direction: column; overflow: hidden;
@@ -541,7 +565,31 @@
     /* Body: canvas fills everything */
     #body { grid-template-columns: 1fr; overflow: hidden; }
     #jog-panel  { display: none; }
-    #right-panel { display: none; }
+    /* ── Eflow legend ── */
+  #eflow-legend { display:none; }
+  #eflow-legend.visible { display:block; }
+  .efl-head { font-family:var(--mono); font-size:9px; letter-spacing:0.08em; color:var(--text2); padding:6px 10px 3px; }
+  .efl-bar-wrap { padding:0 10px 4px; }
+  .efl-bar {
+    height:12px; border-radius:2px;
+    background: linear-gradient(to right,
+      rgb(13,51,204) 0%,
+      rgb(0,204,230) 25%,
+      rgb(26,217,38) 50%,
+      rgb(242,166,0) 75%,
+      rgb(230,20,13) 100%);
+    position:relative;
+  }
+  .efl-pointer {
+    position:absolute; top:-3px; width:2px; height:18px;
+    background:#fff; border:1px solid #000; border-radius:1px;
+    transform:translateX(-50%); transition:left 0.1s;
+    pointer-events:none;
+  }
+  .efl-labels { display:flex; justify-content:space-between; font-family:var(--mono); font-size:9px; color:var(--text2); padding:2px 10px 0; }
+  .efl-ratio { font-family:var(--mono); font-size:11px; text-align:center; padding:2px 10px 6px; font-weight:600; }
+
+  #right-panel { display: none; }
     #canvas-col { position: relative; }
     #corner-tl { right: 58px; } /* don't overlap dock */
 
@@ -1155,6 +1203,21 @@
           <div class="st-row"><span class="st-k">Hotend</span><span class="st-v" id="ps-hotend">—</span></div>
           <div class="st-row"><span class="st-k">Bed</span><span class="st-v" id="ps-bed">—</span></div>
         </div>
+      </div>
+
+      <!-- Eflow legend — shown only when EFLOW mode active -->
+      <div id="eflow-legend" class="ps">
+        <div class="ps-head">EXTRUSION FLOW</div>
+        <div class="efl-head">FLOW RATIO</div>
+        <div class="efl-bar-wrap">
+          <div class="efl-bar" id="efl-bar">
+            <div class="efl-pointer" id="efl-pointer" style="left:50%"></div>
+          </div>
+        </div>
+        <div class="efl-labels">
+          <span>0.50×</span><span>0.75×</span><span>1.00×</span><span>1.25×</span><span>1.50×</span>
+        </div>
+        <div class="efl-ratio" id="efl-ratio-val">—</div>
       </div>
 
       <!-- G-code -->
@@ -2120,18 +2183,24 @@ function buildMeshes(nd){
     if(expectedE < 1e-6) return 1.0;
     return Math.max(0.2, Math.min(3.0, seg.eDelta / expectedE));
   }
-  // Map ratio → RGB: blue(under) → green(nominal) → red(over)
+  // Map ratio → RGB: 5-stop gradient
+  // 0.50 deep blue | 0.75 cyan | 1.00 green | 1.25 amber | 1.50+ red
   function eflowColor(ratio){
     const c = new THREE.Color();
-    if(ratio < 1.0){
-      // blue → green
-      const t = Math.max(0,(ratio-0.2)/0.8);
-      c.setRGB(0, t, 1-t);
-    } else {
-      // green → red
-      const t = Math.min(1,(ratio-1.0)/0.5);
-      c.setRGB(t, 1-t, 0);
-    }
+    const stops = [
+      [0.50, 0.05, 0.20, 0.80],  // deep blue
+      [0.75, 0.00, 0.80, 0.90],  // cyan
+      [1.00, 0.10, 0.85, 0.15],  // green
+      [1.25, 0.95, 0.65, 0.00],  // amber
+      [1.50, 0.90, 0.08, 0.05],  // red
+    ];
+    const r = Math.max(stops[0][0], Math.min(stops[stops.length-1][0], ratio));
+    let i = 0;
+    while(i < stops.length-2 && stops[i+1][0] <= r) i++;
+    const [r0,rr0,rg0,rb0] = stops[i];
+    const [r1,rr1,rg1,rb1] = stops[i+1];
+    const t = (r-r0)/(r1-r0);
+    c.setRGB(rr0+(rr1-rr0)*t, rg0+(rg1-rg0)*t, rb0+(rb1-rb0)*t);
     return c;
   }
 
@@ -2299,6 +2368,8 @@ function updateReadout(moveIdx){
   syncJogFromMove(m);
   document.getElementById('type-label').textContent=TYPE_LABELS[m.type]||m.type;
   document.getElementById('type-dot').style.background=TYPE_COLORS[m.type]||'';
+  // Eflow legend update
+  updateEflowLegend(m);
   // Print state
   document.getElementById('ps-pos').textContent=m.absXYZ?'G90 Absolute':'G91 Relative';
   document.getElementById('ps-emode').textContent=m.absE?'M82 Absolute':'M83 Relative';
@@ -2646,7 +2717,56 @@ document.getElementById('fi').addEventListener('change',ev=>{
 document.getElementById('viewMode').addEventListener('change',()=>rebuildAll(false));
 document.getElementById('nozzle').addEventListener('change',()=>rebuildAll(false));
 document.getElementById('sc').addEventListener('change',()=>rebuildAll(false));
-document.getElementById('ef').addEventListener('change',()=>rebuildAll(false));
+// ── Eflow legend ─────────────────────────────────────────────────
+function eflowRatioForMove(m){
+  if(!m || !m.eDelta || m.segLen < 0.001) return null;
+  const nd = parseFloat(document.getElementById('nozzle-d')?.value) || 0.4;
+  const layerH = nd * 0.75;
+  const filamentArea = Math.PI * (1.75/2) * (1.75/2);
+  const expectedE = (nd * layerH * m.segLen) / filamentArea;
+  if(expectedE < 1e-6) return null;
+  return Math.max(0.05, Math.min(2.5, m.eDelta / expectedE));
+}
+
+function updateEflowLegend(m){
+  const efActive = document.getElementById('ef').checked;
+  const legend = document.getElementById('eflow-legend');
+  legend.classList.toggle('visible', efActive);
+  if(!efActive) return;
+  const isExtrude = m && (m.type==='e3'||m.type==='e5');
+  const ratio = isExtrude ? eflowRatioForMove(m) : null;
+  const ptr = document.getElementById('efl-pointer');
+  const val = document.getElementById('efl-ratio-val');
+  if(ratio == null){
+    ptr.style.left = '50%';
+    val.textContent = '—';
+    val.style.color = 'var(--text2)';
+    return;
+  }
+  // Map ratio 0.5–1.5 to 0–100%
+  const pct = Math.max(0, Math.min(100, (ratio - 0.5) / 1.0 * 100));
+  ptr.style.left = pct + '%';
+  const pctDiff = Math.round((ratio - 1.0) * 100);
+  val.textContent = ratio.toFixed(3) + '×  (' + (pctDiff >= 0 ? '+' : '') + pctDiff + '%)';
+  // Color the text to match the gradient zone
+  if(ratio < 0.85)      val.style.color = '#1488e8';
+  else if(ratio < 0.95) val.style.color = '#00c8d8';
+  else if(ratio < 1.05) val.style.color = '#22bb22';
+  else if(ratio < 1.20) val.style.color = '#d48000';
+  else                  val.style.color = '#d81818';
+}
+
+document.getElementById('ef').addEventListener('change',()=>{
+  rebuildAll(false);
+  // Force legend update at current position
+  const prog = document.getElementById('prog');
+  const moveIdx = Math.floor(allMoves.length * parseInt(prog.value) / 10000);
+  if(allMoves.length && moveIdx > 0){
+    updateEflowLegend(allMoves[Math.min(moveIdx-1, allMoves.length-1)]);
+  } else {
+    document.getElementById('eflow-legend').classList.toggle('visible', document.getElementById('ef').checked);
+  }
+});
 ['se','s5','st'].forEach(id=>document.getElementById(id).addEventListener('change',()=>rebuildAll(false)));
 
 // Show/hide the simple buildplate and nozzle cone
