@@ -940,6 +940,16 @@
         </div>
       </div>
 
+      <!-- Simulation -->
+      <div class="modal-section">
+        <div class="modal-section-title">Simulation</div>
+        <div style="display:grid;grid-template-columns:1fr 100px;gap:6px;align-items:center;font-size:11px;">
+          <span class="s-label">Default acceleration (mm/s²)</span>
+          <input class="s-input" id="default-accel" type="number" value="3000" step="100" min="1">
+        </div>
+        <div class="s-hint" style="margin-top:4px;">Used for realtime playback speed simulation. M204 in G-code overrides per move.</div>
+      </div>
+
       <!-- Axis Limits -->
       <div class="modal-section">
         <div class="modal-section-title">Axis Limits</div>
@@ -1061,6 +1071,8 @@
           <span class="label">TIMELINE</span>
           <span class="val" id="progv">100%</span>
           <span class="move-info" id="moveInfo"></span>
+          <span id="pb-fval" style="font-family:var(--mono);font-size:10px;color:var(--teal);margin-left:10px;"></span>
+          <span id="pb-aval" style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-left:8px;"></span>
         </div>
         <div class="prog-track">
           <div id="prog-fill" style="width:100%"></div>
@@ -1074,6 +1086,8 @@
           <span class="pb-spd-label" style="margin-left:8px;">SPD</span>
           <input type="range" id="pb-speed" min="1" max="200" value="20">
           <span id="pb-speed-val" class="pb-spd-val">20×</span>
+          <button id="pb-realtime" class="pb-btn" title="Toggle realtime simulation" style="margin-left:8px;font-size:10px;padding:0 8px;">REALTIME</button>
+          <span id="rt-total-time" style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-left:6px;"></span>
         </div>
       </div>
 
@@ -1872,8 +1886,9 @@ async function loadMachine(machineName){
   await Promise.all(promises);
   machineLoaded=true;
   currentMachineName=machineName;
+    buildMoveTimes();
   document.getElementById('tb-status').textContent='';
-  setSimpleSceneVisible(false);
+setSimpleSceneVisible(false);
   // Reset to start position
   document.getElementById('prog').value=0;
   applyProgress(0);
@@ -1958,6 +1973,7 @@ document.getElementById('s-apply-btn').addEventListener('click',()=>{
   buildNozzle();
   checkLimits();
   rebuildJogAxes();
+  if(allMoves.length) buildMoveTimes();
   document.getElementById('settings-overlay').classList.remove('open');
 });
 // Chip toggles inside modal for bp/nz visibility
@@ -2002,6 +2018,8 @@ function parseGcode(text){
   let absXYZ=true, absE=false;
   let layerZ=-Infinity, layerIdx=0;
   let hotend=null, bed=null, fan=0;
+  let feedrate=1000; // mm/min, modal
+  let accel=getDefaultAccel(); // mm/s², updated by M204
   const result=[];
   for(let li=0;li<lines.length;li++){
     const raw=lines[li].trim();
@@ -2016,8 +2034,12 @@ function parseGcode(text){
     if(/^M140\b/.test(lu)||/^M190\b/.test(lu)){const sm=lu.match(/S([\d.]+)/);if(sm)bed=parseFloat(sm[1]);continue;}
     if(/^M106\b/.test(lu)){const sm=lu.match(/S([\d.]+)/);fan=sm?Math.round(parseFloat(sm[1])/2.55):100;continue;}
     if(/^M107\b/.test(lu)){fan=0;continue;}
+    // M204 — set acceleration
+    if(/^M204\b/.test(lu)){const sm=lu.match(/[PS]([\d.]+)/);if(sm)accel=parseFloat(sm[1]);continue;}
     const isG0=/^G0\b/.test(lu), isG1=/^G1\b/.test(lu);
     if(!isG0&&!isG1) continue;
+    // F word (feedrate, modal)
+    const fm=lu.match(/F([\d.]+)/); if(fm) feedrate=parseFloat(fm[1]);
     const px=x,py=y,pz=z,pb=b,pc=c;
     const xm=lu.match(/X(-?[\d.]+)/),ym=lu.match(/Y(-?[\d.]+)/),zm=lu.match(/Z(-?[\d.]+)/);
     const bm=lu.match(/B(-?[\d.]+)/),cm=lu.match(/C(-?[\d.]+)/),em=lu.match(/E(-?[\d.]+)/);
@@ -2043,8 +2065,11 @@ function parseGcode(text){
     const s1=toPart(x,y,z,b,c);
     const dx2=s1[0]-s0[0],dy2=s1[1]-s0[1],dz2=s1[2]-s0[2];
     if(dx2*dx2+dy2*dy2+dz2*dz2<1e-8) continue;
+    // Segment length in machine frame (for speed simulation)
+    const segDx=x-px, segDy=y-py, segDz=z-pz;
+    const segLen=Math.sqrt(segDx*segDx+segDy*segDy+segDz*segDz)||0;
     result.push({type,s0,s1,mx:x,my:y,mz:z,mb:b,mc:c,me:e,eDelta,layer:layerIdx,lineNum:li+1,rawLine:raw,
-      absXYZ,absE,hotend,bedTemp:bed,fan});
+      absXYZ,absE,hotend,bedTemp:bed,fan,mf:feedrate,maccel:accel,segLen});
   }
   return result;
 }
@@ -2208,6 +2233,17 @@ function applyProgress(pct){
   document.getElementById('progv').textContent=pctStr;
   document.getElementById('prog-fill').style.width=pctStr;
   document.getElementById('moveInfo').textContent=moveIdx.toLocaleString()+' / '+(allMoves.length||0).toLocaleString();
+  // Show current feedrate and acceleration in info bar
+  if(allMoves.length && moveIdx > 0){
+    const mi = allMoves[Math.min(moveIdx-1, allMoves.length-1)];
+    const fVal = mi.mf != null ? (mi.mf/60).toFixed(0)+'mm/s' : '—';
+    const aVal = mi.maccel != null ? mi.maccel.toFixed(0)+'mm/s²' : '—';
+    document.getElementById('pb-fval').textContent = 'F '+fVal;
+    document.getElementById('pb-aval').textContent = 'A '+aVal;
+  } else {
+    document.getElementById('pb-fval').textContent = '';
+    document.getElementById('pb-aval').textContent = '';
+  }
 
   updateReadout(moveIdx);
   updateNozzlePosition(moveIdx);
@@ -2656,13 +2692,73 @@ document.getElementById('prog').addEventListener('input',e=>applyProgress(parseI
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PLAYBACK
-// setInterval-based playback at ~60fps.  Each tick calls stepForward() which
-// advances the scrub bar and calls applyProgress().  checkCurrentMove() is
-// called every step and returns true to pause on violation.
+// Two modes:
+//   FAST mode  — setInterval at ~60fps, speed multiplier from pb-speed slider
+//   REALTIME   — requestAnimationFrame, trapezoidal velocity profile per segment
 // ═══════════════════════════════════════════════════════════════════════════
-// ── Playback ─────────────────────────────────────────────────────────────
+
+// ── Acceleration default (editable in Settings) ───────────────────
+function getDefaultAccel(){
+  const el = document.getElementById('default-accel');
+  return el ? parseFloat(el.value)||3000 : 3000;
+}
+
+// ── Trapezoidal velocity: time (seconds) to travel segLen mm at feedrate
+// v_max=mf/60 mm/s, accel=maccel mm/s². Returns duration in seconds.
+function trapMoveTime(segLen, mf, maccel){
+  if(segLen <= 0) return 0;
+  const v = mf / 60;        // mm/s
+  const a = Math.max(1, maccel);
+  // Distance needed to ramp up to v: d = v²/(2a)
+  const rampDist = (v * v) / (2 * a);
+  let t;
+  if(2 * rampDist >= segLen){
+    // Triangle profile — can't reach v_max
+    const v_peak = Math.sqrt(a * segLen);
+    t = 2 * v_peak / a;
+  } else {
+    // Trapezoid: ramp up + cruise + ramp down
+    const t_ramp = v / a;
+    const d_cruise = segLen - 2 * rampDist;
+    t = 2 * t_ramp + d_cruise / v;
+  }
+  return t;
+}
+
+// Precompute cumulative real-time offsets (seconds) for each move.
+// Rebuilt after parseGcode.
+let moveTimes = [];      // moveTimes[i] = duration of move i in seconds
+let moveCumTime = [];    // moveCumTime[i] = cumulative time at START of move i
+let totalRealTime = 0;   // total print time in seconds
+
+function buildMoveTimes(){
+  moveTimes = new Float64Array(allMoves.length);
+  moveCumTime = new Float64Array(allMoves.length + 1);
+  moveCumTime[0] = 0;
+  for(let i = 0; i < allMoves.length; i++){
+    const m = allMoves[i];
+    moveTimes[i] = trapMoveTime(m.segLen||0, m.mf||1000, m.maccel||3000);
+    moveCumTime[i+1] = moveCumTime[i] + moveTimes[i];
+  }
+  totalRealTime = moveCumTime[allMoves.length];
+  updateRealtimeDisplay();
+}
+
+function updateRealtimeDisplay(){
+  const el = document.getElementById('rt-total-time');
+  if(!el || !totalRealTime) return;
+  const s = totalRealTime;
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = Math.floor(s%60);
+  el.textContent = h>0 ? `${h}h ${m}m ${sec}s` : m>0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+// ── Playback state ─────────────────────────────────────────────────
 let playInterval=null;
 let isPlaying=false;
+let realtimeMode=false;       // true = realtime, false = fast
+let rtStartTime=null;         // performance.now() at playback start
+let rtStartOffset=0;          // seconds into print at playback start
+let rtRafHandle=null;
 
 function setPlaying(val){
   isPlaying=val;
@@ -2678,15 +2774,34 @@ function stepForward(){
   const next=Math.min(10000, cur+speed);
   prog.value=next;
   applyProgress(next);
-  if(checkCurrentMove()) stopPlayback(); // pause on violation
+  if(checkCurrentMove()) stopPlayback();
+}
+
+// ── Realtime RAF loop ─────────────────────────────────────────────
+function rtFrame(now){
+  if(!isPlaying) return;
+  const elapsedSec = (now - rtStartTime) / 1000 + rtStartOffset;
+  if(totalRealTime <= 0 || elapsedSec >= totalRealTime){
+    stopPlayback(); checkCurrentMove(); return;
+  }
+  // Binary search for current move index
+  let lo=0, hi=allMoves.length;
+  while(lo<hi){ const mid=(lo+hi)>>1; if(moveCumTime[mid]<=elapsedSec) lo=mid+1; else hi=mid; }
+  const moveIdx = Math.max(0, lo-1);
+  // Convert moveIdx to prog 0-10000
+  const pct = Math.round((moveIdx / allMoves.length) * 10000);
+  const prog = document.getElementById('prog');
+  prog.value = pct;
+  applyProgress(pct);
+  if(checkCurrentMove()){ stopPlayback(); return; }
+  rtRafHandle = requestAnimationFrame(rtFrame);
 }
 
 function stopPlayback(){
+  if(rtRafHandle){ cancelAnimationFrame(rtRafHandle); rtRafHandle=null; }
   clearInterval(playInterval);
   playInterval=null;
   setPlaying(false);
-  // Pre-warm print hull cache now, while bedGroup is still in its print pose.
-  // This ensures isJogging checks have a valid hull even if jog starts immediately.
   if(mesh3 || mesh5){
     const prog = document.getElementById('prog');
     const moveIdx = Math.max(0, Math.floor(allMoves.length * parseInt(prog.value) / 10000) - 1);
@@ -2697,9 +2812,20 @@ function stopPlayback(){
 }
 
 function startPlayback(){
-  if(playInterval) clearInterval(playInterval);
-  setPlaying(true);
-  playInterval=setInterval(stepForward, 16); // ~60fps
+  if(realtimeMode && totalRealTime > 0){
+    // Compute starting time offset from current scrub position
+    const prog = document.getElementById('prog');
+    const frac = parseInt(prog.value) / 10000;
+    const moveIdx = Math.floor(allMoves.length * frac);
+    rtStartOffset = moveCumTime[Math.min(moveIdx, allMoves.length)];
+    rtStartTime = performance.now();
+    setPlaying(true);
+    rtRafHandle = requestAnimationFrame(rtFrame);
+  } else {
+    if(playInterval) clearInterval(playInterval);
+    setPlaying(true);
+    playInterval=setInterval(stepForward, 16);
+  }
 }
 
 document.getElementById('pb-play').addEventListener('click',()=>{
@@ -2722,6 +2848,27 @@ document.getElementById('pb-start').addEventListener('click',()=>{ stopPlayback(
 document.getElementById('pb-end').addEventListener('click',()=>{ stopPlayback(); document.getElementById('prog').value=10000; applyProgress(10000); });
 document.getElementById('pb-speed').addEventListener('input',function(){
   document.getElementById('pb-speed-val').textContent=this.value+'×';
+});
+
+// ── Realtime toggle ───────────────────────────────────────────────
+document.getElementById('pb-realtime').addEventListener('click', ()=>{
+  realtimeMode = !realtimeMode;
+  const btn = document.getElementById('pb-realtime');
+  btn.classList.toggle('play-active', realtimeMode);
+  // Show/hide speed slider — not used in realtime mode
+  const spd = document.getElementById('pb-speed');
+  const spdVal = document.getElementById('pb-speed-val');
+  const spdLbl = document.querySelector('.pb-spd-label');
+  if(spd) spd.style.opacity = realtimeMode ? '0.3' : '1';
+  if(spdVal) spdVal.style.opacity = realtimeMode ? '0.3' : '1';
+  if(spdLbl) spdLbl.style.opacity = realtimeMode ? '0.3' : '1';
+  // If currently playing, restart in new mode
+  if(isPlaying){ stopPlayback(); startPlayback(); }
+});
+
+// Rebuild move times when default accel changes
+document.getElementById('default-accel')?.addEventListener('change', ()=>{
+  if(allMoves.length) buildMoveTimes();
 });
 
 // ── Arrow key single-line navigation ─────────────────────────────
