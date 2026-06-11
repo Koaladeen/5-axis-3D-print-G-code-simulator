@@ -3761,11 +3761,22 @@ function getGizmoHit(e){
   const targets = [];
   gizmoGroup.traverse(c=>{ if(c.isMesh && c.userData.isGizmo) targets.push(c); });
   const hits = gizmoRay.intersectObjects(targets, false);
-  console.log('[getGizmoHit] targets=', targets.length, 'hits=', hits.length, 'gizmoGroup.parent=', gizmoGroup.parent?.name||gizmoGroup.parent?.type);
   if(targets.length > 0){
     const wp = new THREE.Vector3(); targets[0].getWorldPosition(wp);
-    console.log('[getGizmoHit] first target world pos=', wp.x.toFixed(1), wp.y.toFixed(1), wp.z.toFixed(1));
-    console.log('[getGizmoHit] ray origin=', gizmoRay.ray.origin.x.toFixed(1), gizmoRay.ray.origin.y.toFixed(1), gizmoRay.ray.origin.z.toFixed(1));
+    const rd = gizmoRay.ray.direction;
+    // Compute closest distance from ray to target world pos
+    const ro = gizmoRay.ray.origin;
+    const dx=wp.x-ro.x, dy=wp.y-ro.y, dz=wp.z-ro.z;
+    const dot=dx*rd.x+dy*rd.y+dz*rd.z;
+    const cx=ro.x+rd.x*dot-wp.x, cy=ro.y+rd.y*dot-wp.y, cz=ro.z+rd.z*dot-wp.z;
+    const dist=Math.sqrt(cx*cx+cy*cy+cz*cz);
+    console.log('[getGizmoHit] targets=',targets.length,'hits=',hits.length,'parent=',gizmoGroup.parent?.name||gizmoGroup.parent?.type);
+    console.log('[getGizmoHit] target[0] world=',wp.x.toFixed(2),wp.y.toFixed(2),wp.z.toFixed(2),' ray->closest dist=',dist.toFixed(2));
+    console.log('[getGizmoHit] ray dir=',rd.x.toFixed(3),rd.y.toFixed(3),rd.z.toFixed(3));
+    console.log('[getGizmoHit] target[0] matrixWorld=', targets[0].matrixWorld.elements.slice(12,15).map(v=>v.toFixed(2)));
+    // Also log gizmoGroup world pos
+    const gp=new THREE.Vector3(); gizmoGroup.getWorldPosition(gp);
+    console.log('[getGizmoHit] gizmoGroup world pos=',gp.x.toFixed(2),gp.y.toFixed(2),gp.z.toFixed(2));
   }
   return hits.length>0 ? hits[0].object.userData.gizmoAxis : null;
 }
