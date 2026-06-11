@@ -885,9 +885,27 @@
         <span>PART</span><span>GROUP</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>SZ</span><span>OFFSET X,Y,Z</span><span></span>
       </div>
       <div id="coll-list"></div>
+      <!-- Section Hull form — shown when "Section hull" button clicked -->
+      <div id="coll-section-form" style="display:none;background:var(--bg3);border:1px solid var(--border-hi);border-radius:4px;padding:10px;margin:6px 0;gap:8px;flex-wrap:wrap;align-items:center;font-family:var(--mono);font-size:11px;">
+        <span style="color:var(--text2);letter-spacing:0.08em;">SECTION HULL</span>
+        <select id="sh-part" style="background:var(--bg4);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:11px;padding:2px 5px;"></select>
+        <select id="sh-axis" style="background:var(--bg4);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:11px;padding:2px 5px;">
+          <option value="x">X axis</option>
+          <option value="y">Y axis</option>
+          <option value="z" selected>Z axis</option>
+        </select>
+        <span style="color:var(--text2);">min</span>
+        <input id="sh-min" type="number" step="1" value="0" style="width:60px;background:var(--bg4);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:11px;padding:2px 5px;">
+        <span style="color:var(--text2);">max</span>
+        <input id="sh-max" type="number" step="1" value="50" style="width:60px;background:var(--bg4);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:11px;padding:2px 5px;">
+        <button class="s-apply" id="sh-build-btn" style="padding:3px 12px;font-size:11px;">Build</button>
+        <button class="h-btn" id="sh-cancel-btn" style="padding:3px 10px;font-size:11px;">✕</button>
+        <span id="sh-status" style="color:var(--text2);font-size:10px;"></span>
+      </div>
       <div id="coll-footer">
         <button class="h-btn" id="coll-add-btn">+ Add proxy</button>
         <button class="h-btn" id="coll-auto-btn" style="border-color:rgba(34,197,94,0.4);color:#22c55e;">⟳ Auto-generate hulls</button>
+        <button class="h-btn" id="coll-section-btn" style="border-color:rgba(99,179,237,0.4);color:#63b3ed;">✂ Section hull…</button>
         <button class="h-btn" id="coll-export-btn">↓ Export JSON</button>
         <button class="h-btn" id="coll-import-btn">↑ Import JSON</button>
         <input type="file" id="coll-import-file" accept=".json" style="display:none">
@@ -3723,6 +3741,8 @@ function setProxyHighlight(id, on){
 const gizmoRay = new THREE.Raycaster();
 function getGizmoHit(e){
   if(!gizmoGroup) return null;
+  // Force full matrix chain update so raycaster sees current positions
+  scene.updateMatrixWorld(true);
   const rect = cvWrap.getBoundingClientRect();
   const mx = ((e.clientX-rect.left)/rect.width)*2-1;
   const my = -((e.clientY-rect.top)/rect.height)*2+1;
@@ -3752,8 +3772,8 @@ function getProxyHit(e){
 function screenToAxisDelta(e, prevE, axisKey){
   if(!gizmoGroup || !gizmoGroup.parent) return 0;
 
-  // Ensure world matrices are current
-  gizmoGroup.parent.updateWorldMatrix(true, false);
+  // Ensure full world matrix chain is current (gizmo may be nested deep)
+  scene.updateMatrixWorld(true);
 
   const rect = cvWrap.getBoundingClientRect();
   const W = rect.width, H = rect.height;
@@ -4017,7 +4037,99 @@ document.getElementById('coll-add-btn').addEventListener('click',()=>{
 
 document.getElementById('coll-auto-btn').addEventListener('click',()=>{
   autoGenerateHulls();
+})
+
+// ── Section Hull ──────────────────────────────────────────────────
+document.getElementById('coll-section-btn').addEventListener('click', ()=>{
+  const form = document.getElementById('coll-section-form');
+  const isVisible = form.style.display !== 'none';
+  form.style.display = isVisible ? 'none' : 'flex';
+  if(!isVisible){
+    // Populate part selector with loaded machine parts
+    const sel = document.getElementById('sh-part');
+    sel.innerHTML = '';
+    const available = MACHINE_PARTS.filter(p => mGrp[p] && mGrp[p].children.some(c => c.isMesh));
+    available.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p; o.textContent = p;
+      sel.appendChild(o);
+    });
+    // Try to pre-select the currently selected part
+    if(selectedPart && available.includes(selectedPart)) sel.value = selectedPart;
+  }
 });
+
+document.getElementById('sh-cancel-btn').addEventListener('click', ()=>{
+  document.getElementById('coll-section-form').style.display = 'none';
+});
+
+document.getElementById('sh-build-btn').addEventListener('click', ()=>{
+  const partName = document.getElementById('sh-part').value;
+  const axis     = document.getElementById('sh-axis').value;   // 'x','y','z'
+  const minVal   = parseFloat(document.getElementById('sh-min').value);
+  const maxVal   = parseFloat(document.getElementById('sh-max').value);
+  const status   = document.getElementById('sh-status');
+
+  if(!partName){ status.textContent = 'Select a part'; return; }
+  if(minVal >= maxVal){ status.textContent = 'min must be < max'; return; }
+
+  const grp = mGrp[partName];
+  if(!grp){ status.textContent = 'Part not loaded'; return; }
+
+  status.textContent = 'Sampling…';
+
+  // Sample vertices from meshes in part group, filtered to the axis slice
+  const axIdx = {x:0, y:1, z:2}[axis];
+  const pts = [];
+  const v = new THREE.Vector3();
+
+  for(const child of grp.children){
+    if(!child.isMesh) continue;
+    const pos = child.geometry?.attributes?.position;
+    if(!pos) continue;
+    const localMat = child.matrix;
+    const total = pos.count;
+    const step = Math.max(1, Math.floor(total / 2000));
+    for(let i = 0; i < total; i += step){
+      v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(localMat);
+      const coord = [v.x, v.y, v.z][axIdx];
+      if(coord >= minVal && coord <= maxVal){
+        pts.push([v.x, v.y, v.z]);
+      }
+    }
+    // Always include boundary extremes for a tight hull
+    for(let i = 0; i < total; i++){
+      v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(localMat);
+      const coord = [v.x, v.y, v.z][axIdx];
+      if(coord >= minVal && coord <= maxVal){
+        pts.push([v.x, v.y, v.z]);
+      }
+    }
+  }
+
+  if(pts.length < 4){
+    status.textContent = `Only ${pts.length} pts in range — expand range`;
+    return;
+  }
+
+  // Extract convex hull surface verts
+  const hullVerts = extractHullVertices(pts);
+  const label = `${partName} ${axis.toUpperCase()}[${minVal}–${maxVal}]`;
+
+  collProxies.push({
+    id: nextProxyId++,
+    part: partName,
+    type: 'hull',
+    hullPoints: hullVerts,
+    sx:0, sy:0, sz:0, ox:0, oy:0, oz:0,
+    label
+  });
+
+  rebuildProxyWireframes();
+  renderProxyList();
+  status.textContent = `✓ Hull with ${hullVerts.length} pts`;
+  setTimeout(()=>{ document.getElementById('coll-section-form').style.display = 'none'; }, 1200);
+});;
 document.getElementById('coll-check-btn').addEventListener('click',()=>checkCollisions());
 
 document.getElementById('coll-export-btn').addEventListener('click',()=>{
