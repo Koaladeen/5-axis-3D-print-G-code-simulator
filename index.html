@@ -3396,8 +3396,9 @@ cvWrap.addEventListener('click',e=>{
   const dx=Math.abs(e.clientX-mouseDownPos.x), dy=Math.abs(e.clientY-mouseDownPos.y);
   if(dx>4||dy>4) return;
 
-  // Don't deselect if clicking a gizmo handle
-  if(getGizmoHit(e)) return;
+  // Don't deselect if clicking a gizmo handle or just finished dragging one
+  if(gizmoDragOccurred) return;
+  if(selectedProxyId !== null && gizmoGroup) return; // preserve selection while gizmo is active
 
   // Check if clicking a proxy mesh
   const proxyId=getProxyHit(e);
@@ -3632,6 +3633,7 @@ function checkCollisions(){
 let selectedProxyId = null;
 let gizmoGroup = null;
 let gizmoDragging = false;
+let gizmoDragOccurred = false; // prevents click handler from deselecting after drag
 let gizmoAxis = null; // 'x','y','z'
 let gizmoDragStart = null;
 let gizmoProxyStart = null;
@@ -3706,7 +3708,7 @@ function removeGizmo(){
     gizmoGroup.traverse(c=>{if(c.geometry)c.geometry.dispose();});
   }
   gizmoGroup = null;
-  selectedProxyId = null;
+  // NOTE: do NOT reset selectedProxyId here — selectProxy() manages that
 }
 
 function selectProxy(id){
@@ -3717,7 +3719,7 @@ function selectProxy(id){
     if(prev) setProxyHighlight(selectedProxyId, false);
   }
   selectedProxyId = id;
-  if(id === null){ removeGizmo(); return; }
+  if(id === null){ removeGizmo(); selectedProxyId = null; return; }
   const proxy = collProxies.find(p=>p.id===id);
   if(!proxy){ removeGizmo(); return; }
   setProxyHighlight(id, true);
@@ -3749,21 +3751,43 @@ function setProxyHighlight(id, on){
 const gizmoRay = new THREE.Raycaster();
 gizmoRay.params.Line = { threshold: 3 };
 gizmoRay.params.Points = { threshold: 3 };
+// Screen-space gizmo hit test — projects each arrow's world position to pixels
+// and checks pixel distance. Much more reliable than mesh raycasting because
+// it doesn't depend on matrix timing and works regardless of camera angle.
+const _gizmoHitV = new THREE.Vector3();
 function getGizmoHit(e){
   if(!gizmoGroup) return null;
-  // Sync rootGroup transform NOW (RAF may not have run yet this frame)
+  // Sync rootGroup so world matrices are current
   rootGroup.rotation.x = rotX; rootGroup.rotation.y = rotY;
   rootGroup.position.x = panX; rootGroup.position.y = panY;
   scene.updateMatrixWorld(true);
-  const rect = cvWrap.getBoundingClientRect();
-  const mx = ((e.clientX-rect.left)/rect.width)*2-1;
-  const my = -((e.clientY-rect.top)/rect.height)*2+1;
-  gizmoRay.setFromCamera({x:mx,y:my}, camera);
-  const targets = [];
-  gizmoGroup.traverse(c=>{ if(c.isMesh && c.userData.isGizmo) targets.push(c); });
-  const hits = gizmoRay.intersectObjects(targets, false);
 
-  return hits.length>0 ? hits[0].object.userData.gizmoAxis : null;
+  const rect = cvWrap.getBoundingClientRect();
+  const W = rect.width, H = rect.height;
+  const ex = e.clientX - rect.left;
+  const ey = e.clientY - rect.top;
+
+  // For each axis, project the arrow shaft midpoint to screen pixels
+  const AXES = [
+    { key:'x', local: new THREE.Vector3(GIZMO_LENGTH*0.5, 0, 0) },
+    { key:'y', local: new THREE.Vector3(0, GIZMO_LENGTH*0.5, 0) },
+    { key:'z', local: new THREE.Vector3(0, 0, GIZMO_LENGTH*0.5) },
+  ];
+
+  let bestAxis = null;
+  let bestDist = 28; // pixel threshold — ~28px hit radius
+
+  for(const ax of AXES){
+    // Transform local arrow midpoint to world space
+    _gizmoHitV.copy(ax.local).applyMatrix4(gizmoGroup.matrixWorld);
+    // Project to NDC then pixels
+    const ndc = _gizmoHitV.clone().project(camera);
+    const sx = (ndc.x + 1) * 0.5 * W;
+    const sy = (1 - ndc.y) * 0.5 * H;  // flip Y: NDC +1 = top
+    const d = Math.sqrt((ex-sx)*(ex-sx)+(ey-sy)*(ey-sy));
+    if(d < bestDist){ bestDist = d; bestAxis = ax.key; }
+  }
+  return bestAxis;
 }
 
 function getProxyHit(e){
@@ -3855,6 +3879,8 @@ window.addEventListener('mouseup', e=>{
     gizmoDragging = false;
     gizmoAxis = null;
     gizmoPrevEvent = null;
+    gizmoDragOccurred = true; // block click handler from deselecting
+    setTimeout(()=>{ gizmoDragOccurred = false; }, 50);
   }
 });
 
