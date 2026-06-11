@@ -882,7 +882,7 @@
         <span style="font-size:9px;font-family:var(--mono);color:var(--text2);letter-spacing:0.1em;">GROUPS</span>
       </div>
       <div class="coll-header-row">
-        <span>PART</span><span>GROUP</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>SZ</span><span>OFFSET X,Y,Z</span><span></span>
+        <span>PART</span><span>GROUP</span><span>TYPE</span><span>SX / R</span><span>SY / H</span><span>SZ</span><span>OFF mX,mZ↑,mY</span><span></span>
       </div>
       <div id="coll-list"></div>
       <!-- Section Hull form — shown when "Section hull" button clicked -->
@@ -890,9 +890,9 @@
         <span style="color:var(--text2);letter-spacing:0.08em;">SECTION HULL</span>
         <select id="sh-part" style="background:var(--bg4);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:11px;padding:2px 5px;"></select>
         <select id="sh-axis" style="background:var(--bg4);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:11px;padding:2px 5px;">
-          <option value="x">X axis</option>
-          <option value="y">Y axis</option>
-          <option value="z" selected>Z axis</option>
+          <option value="x">X axis (machine X)</option>
+          <option value="y" selected>Y axis (machine Z / up)</option>
+          <option value="z">Z axis (machine Y / depth)</option>
         </select>
         <span style="color:var(--text2);">min</span>
         <input id="sh-min" type="number" step="1" value="0" style="width:60px;background:var(--bg4);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:11px;padding:2px 5px;">
@@ -3640,6 +3640,7 @@ const GIZMO_COLORS = { x: 0xcc2020, y: 0x20aa40, z: 0x2060cc };
 const GIZMO_HOVER  = { x: 0xff6060, y: 0x60ff80, z: 0x60a0ff };
 const GIZMO_LENGTH = 40;
 const GIZMO_RADIUS = 1.2;
+const GIZMO_HIT_RADIUS = 6; // invisible hit area radius for easier clicking
 
 function buildGizmo(proxy){
   removeGizmo();
@@ -3677,6 +3678,13 @@ function buildGizmo(proxy){
     handle.userData = { gizmoAxis: ax.key, isGizmo: true };
     shaft.userData = { gizmoAxis: ax.key, isGizmo: true };
     cone.userData  = { gizmoAxis: ax.key, isGizmo: true };
+    // Invisible fat hit-area cylinder for easier raycasting
+    const hitGeo = new THREE.CylinderGeometry(GIZMO_HIT_RADIUS, GIZMO_HIT_RADIUS, GIZMO_LENGTH, 8);
+    const hitMat = new THREE.MeshBasicMaterial({visible:false, side:THREE.DoubleSide});
+    const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    hitMesh.position.y = GIZMO_LENGTH/2;
+    hitMesh.userData = { gizmoAxis: ax.key, isGizmo: true };
+    handle.add(hitMesh);
     gizmoGroup.add(handle);
   }
 
@@ -3739,6 +3747,8 @@ function setProxyHighlight(id, on){
 
 // Gizmo raycasting — check if mouse hits a gizmo handle
 const gizmoRay = new THREE.Raycaster();
+gizmoRay.params.Line = { threshold: 3 };
+gizmoRay.params.Points = { threshold: 3 };
 function getGizmoHit(e){
   if(!gizmoGroup) return null;
   // Force full matrix chain update so raycaster sees current positions
@@ -3813,10 +3823,11 @@ let gizmoPrevEvent = null;
 window.addEventListener('mousemove', e=>{
   if(!gizmoDragging || !gizmoAxis || selectedProxyId===null) return;
   const proxy = collProxies.find(p=>p.id===selectedProxyId);
-  if(!proxy) return;
+  if(!proxy){ gizmoDragging=false; return; }
 
   const delta = screenToAxisDelta(e, gizmoPrevEvent, gizmoAxis);
   gizmoPrevEvent = {clientX:e.clientX, clientY:e.clientY};
+  if(Math.abs(delta) < 0.0001) return;
 
   proxy.ox = (proxy.ox||0) + (gizmoAxis==='x' ? delta : 0);
   proxy.oy = (proxy.oy||0) + (gizmoAxis==='y' ? delta : 0);
@@ -3886,7 +3897,7 @@ function renderProxyList(){
         <span class="coll-size-label">D</span>
         <input class="cp-sz cp-num" type="number" data-id="${proxy.id}" value="${proxy.sz||proxy.sx}" step="1" min="1" title="Depth (box only)" ${proxy.type!=='box'?'disabled':''}>
         <span class="coll-size-label">off</span>
-        <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset X,Y,Z" placeholder="0,0,0" ${proxy.type==='hull'?'disabled':''}>
+        <input class="cp-off" type="text" data-id="${proxy.id}" value="${proxy.ox},${proxy.oy},${proxy.oz}" title="Offset: machine X, machine Z (up), machine Y" placeholder="0,0,0" ${proxy.type==='hull'?'disabled':''}>
       </div>
     `;
     container.appendChild(row);
