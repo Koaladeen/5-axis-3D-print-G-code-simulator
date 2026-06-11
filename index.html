@@ -1534,6 +1534,7 @@ cvWrap.addEventListener('contextmenu',e=>e.preventDefault());
 cvWrap.addEventListener('mousedown',e=>{
   if(collConfigOpen){
     const ax = getGizmoHit(e);
+    console.log('[gizmo] collConfigOpen=true, gizmoGroup=', !!gizmoGroup, 'selectedProxyId=', selectedProxyId, 'hit=', ax);
     if(ax){
       gizmoDragging=true;
       gizmoAxis=ax;
@@ -3760,6 +3761,12 @@ function getGizmoHit(e){
   const targets = [];
   gizmoGroup.traverse(c=>{ if(c.isMesh && c.userData.isGizmo) targets.push(c); });
   const hits = gizmoRay.intersectObjects(targets, false);
+  console.log('[getGizmoHit] targets=', targets.length, 'hits=', hits.length, 'gizmoGroup.parent=', gizmoGroup.parent?.name||gizmoGroup.parent?.type);
+  if(targets.length > 0){
+    const wp = new THREE.Vector3(); targets[0].getWorldPosition(wp);
+    console.log('[getGizmoHit] first target world pos=', wp.x.toFixed(1), wp.y.toFixed(1), wp.z.toFixed(1));
+    console.log('[getGizmoHit] ray origin=', gizmoRay.ray.origin.x.toFixed(1), gizmoRay.ray.origin.y.toFixed(1), gizmoRay.ray.origin.z.toFixed(1));
+  }
   return hits.length>0 ? hits[0].object.userData.gizmoAxis : null;
 }
 
