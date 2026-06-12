@@ -49,19 +49,19 @@
     },
     "Z": {
       "color": "#5577aa",
-      "opacity": 0.15
+      "opacity": 1
     },
     "B": {
       "color": "#5577aa",
-      "opacity": 0.3
+      "opacity": 1
     },
     "C": {
       "color": "#3a6a5a",
-      "opacity": 0.25
+      "opacity": 1
     },
     "Y": {
       "color": "#5577aa",
-      "opacity": 0.3
+      "opacity": 1
     },
     "X": {
       "color": "#aa6633",
@@ -893,15 +893,15 @@
       "sy": 20,
       "sz": 30,
       "ox": 0,
-      "oy": 52,
-      "oz": -35
+      "oy": 54.157545287868416,
+      "oz": -37.71791436349983
     },
     {
       "part": "C",
       "type": "box",
-      "sx": 90,
+      "sx": 85,
       "sy": 20,
-      "sz": 90,
+      "sz": 85,
       "ox": 0,
       "oy": -10,
       "oz": 0
