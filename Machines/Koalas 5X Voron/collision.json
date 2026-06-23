@@ -1,76 +1,7 @@
 {
-  "_version": 1,
-  "buildplate": {
-    "w": 90,
-    "d": 90,
-    "t": 3,
-    "color": "#1e3a5f",
-    "visible": false
-  },
-  "nozzle": {
-    "tip": 0.8,
-    "base": 8,
-    "angle": 45,
-    "length": 10,
-    "color": "#94a3b8",
-    "visible": false
-  },
-  "limits": {
-    "x": {
-      "min": -50,
-      "max": 50
-    },
-    "y": {
-      "min": -50,
-      "max": 50
-    },
-    "z": {
-      "min": 0,
-      "max": 90
-    },
-    "b": {
-      "min": -32,
-      "max": 120
-    },
-    "c": {
-      "min": -99999,
-      "max": 99999
-    }
-  },
-  "machineOffset": {
-    "x": 0,
-    "y": 0,
-    "z": 0
-  },
-  "machineAppearance": {
-    "Frame": {
-      "color": "#4a6080",
-      "opacity": 0.2
-    },
-    "Z": {
-      "color": "#5577aa",
-      "opacity": 1
-    },
-    "B": {
-      "color": "#5577aa",
-      "opacity": 1
-    },
-    "C": {
-      "color": "#3a6a5a",
-      "opacity": 1
-    },
-    "Y": {
-      "color": "#5577aa",
-      "opacity": 1
-    },
-    "X": {
-      "color": "#aa6633",
-      "opacity": 1
-    }
-  },
-  "nozzleDiameter": 0.4,
-  "collisionProxies": [
+  "proxies": [
     {
+      "id": 1,
       "part": "Z",
       "type": "hull",
       "hullPoints": [
@@ -419,6 +350,7 @@
       "label": "Z hull 1"
     },
     {
+      "id": 2,
       "part": "Z",
       "type": "hull",
       "hullPoints": [
@@ -887,6 +819,7 @@
       "label": "Z hull 2"
     },
     {
+      "id": 5,
       "part": "C",
       "type": "hull",
       "hullPoints": [
@@ -1245,6 +1178,7 @@
       "label": "C hull 1"
     },
     {
+      "id": 6,
       "part": "C",
       "type": "hull",
       "hullPoints": [
@@ -1638,6 +1572,7 @@
       "label": "C hull 2"
     },
     {
+      "id": 9,
       "part": "X",
       "type": "hull",
       "hullPoints": [
@@ -2321,6 +2256,7 @@
       "label": "X hull 1"
     },
     {
+      "id": 10,
       "part": "X",
       "type": "hull",
       "hullPoints": [
@@ -3409,6 +3345,7 @@
       "label": "X hull 2"
     },
     {
+      "id": 11,
       "part": "Y",
       "type": "box",
       "sx": 150,
@@ -3419,111 +3356,13 @@
       "oz": -30.40842357137952
     }
   ],
-  "collisionEnabled": true,
-  "collisionShowProxy": false,
-  "collisionPrintMesh": false,
-  "kinematics": {
-    "parts": [
-      {
-        "name": "Frame",
-        "parent": null,
-        "type": "static",
-        "gcode": null,
-        "threeAxis": [
-          0,
-          1,
-          0
-        ],
-        "invert": false,
-        "bedSide": true
-      },
-      {
-        "name": "Z",
-        "parent": "Frame",
-        "type": "linear",
-        "gcode": "mz",
-        "threeAxis": [
-          0,
-          1,
-          0
-        ],
-        "invert": true,
-        "bedSide": true
-      },
-      {
-        "name": "B",
-        "parent": "Z",
-        "type": "rotary",
-        "gcode": "mb",
-        "threeAxis": [
-          0,
-          0,
-          -1
-        ],
-        "invert": true,
-        "bedSide": true
-      },
-      {
-        "name": "C",
-        "parent": "B",
-        "type": "rotary",
-        "gcode": "mc",
-        "threeAxis": [
-          0,
-          1,
-          0
-        ],
-        "invert": false,
-        "bedSide": true
-      },
-      {
-        "name": "Y",
-        "parent": "Frame",
-        "type": "linear",
-        "gcode": "my",
-        "threeAxis": [
-          0,
-          0,
-          -1
-        ],
-        "invert": false,
-        "bedSide": false
-      },
-      {
-        "name": "X",
-        "parent": "Y",
-        "type": "linear",
-        "gcode": "mx",
-        "threeAxis": [
-          1,
-          0,
-          0
-        ],
-        "invert": false,
-        "bedSide": false
-      }
-    ],
-    "bedPart": "C",
-    "toolPart": "X",
-    "bedRotAxes": [
-      {
-        "gcode": "mb",
-        "axis": [
-          0,
-          0,
-          1
-        ],
-        "invert": false
-      },
-      {
-        "gcode": "mc",
-        "axis": [
-          0,
-          1,
-          0
-        ],
-        "invert": true
-      }
-    ]
+  "groups": {
+    "Frame": 0,
+    "Z": 2,
+    "B": 2,
+    "C": 2,
+    "Y": 1,
+    "X": 1,
+    "PrintMesh": 2
   }
 }
